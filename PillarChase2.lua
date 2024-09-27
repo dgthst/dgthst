@@ -14,6 +14,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local localPlayer = Players.LocalPlayer
 local PlayerGui = localPlayer.PlayerGui
+local CurrentCamera = workspace.CurrentCamera
 
 local Player_ESP = false
 local Player_ShowHealth = false
@@ -655,6 +656,10 @@ function ItemInteractDistance()
     end
 end
 
+function SetCameraFOV(fovNumber)
+    CurrentCamera.FieldOfView = fovNumber
+end
+
 function NotifyUser_NotWorking(toggle)
     if toggle == true then
         OrionLib:MakeNotification({
@@ -919,6 +924,13 @@ visualTab:AddToggle({
             ActivateFullbright()
         end
 	end    
+})
+
+visualTab:AddButton({
+	Name = "Set FOV (70)",
+	Callback = function()
+        SetCameraFOV(70)
+  	end    
 })
 
 farmTab:AddToggle({
