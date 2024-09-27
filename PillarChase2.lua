@@ -17,31 +17,29 @@ local PlayerGui = localPlayer.PlayerGui
 
 local Player_ESP = false
 local Player_ShowHealth = false
-local ESP_ShowDistance = false -- Player_ShowDistance
-local ESP_ShowIcon = false -- Player_ShowIcon
+local Player_ShowDistance = false
+local Player_ShowIcon = false
 
-local ESP_Item = false -- Item_ESP
-local ESP_ShowItemName = false -- Item_ShowName
+local Item_ESP = false
+local Item_ShowName = false
+local Item_InteractRange = false
+local Item_ItemSelected = "None"
 
-local ESP_Objective = false -- Objective_ESP
-local ESP_ShowObjectiveName = false -- Objective_ShowName
+local Objective_ESP = false
+local Objective_ShowName = false
+local Objective_InteractRange = false
 
-local ESP_Ability = false -- Ability_ESP
-local ESP_ShowAbilityName = false -- Ability_ShowName
+local Ability_ESP = false
+local Ability_ShowName = false
+local Ability_AutoJumpMX = false
 
-local VISUAL_AntiDebris = false -- Visual_AntiDebris
-local VISUAL_Fullbright = false -- Visual_Fullbright
+local Visual_AntiDebris = false
+local Visual_Fullbright = false
 
-local ABILITY_AutoJumpMX = false -- Ability_AutoJumpMX
+local Farm_MaxCoins = false
+local Farm_AutoMove = false
 
-local OBJECTIVE_IncreaseInteractDistance = false -- Objective_InteractRange
-
-local ITEM_IncreaseInteractDistance = false -- Item_InteractRange
-
-local AUTOFARM_MaxCoins = false -- AutoFarm_MaxCoins
-local AUTOFARM_AutoMove = false -- AutoFarm_AutoMove
-
-local OTHER_MuteLobbyRadio = false -- Other_MuteRadio
+local Lobby_MuteRadio = false
 
 -- Functions
 
@@ -117,7 +115,7 @@ function StartPlayerESP()
 end
 
 function StartItemESP()
-    while ESP_Item == true do
+    while Item_ESP == true do
         for _, itemModel in workspace.Server.PickUps:GetChildren() do
             RemoveESP(itemModel)
             AddItemESP(itemModel)
@@ -128,7 +126,7 @@ function StartItemESP()
 end
 
 function StartObjectiveESP()
-    while ESP_Objective == true do
+    while Objective_ESP == true do
         local currentObjectives = GetCurrentObjectives()
 
         for _, objectiveModel in pairs(currentObjectives) do
@@ -144,7 +142,7 @@ function StartObjectiveESP()
 end
 
 function StartAbilityESP()
-    while ESP_Ability == true do
+    while Ability_ESP == true do
         local currentAbilities = GetCurrentAbilities()
 
         for _, abilityModel in pairs(currentAbilities) do
@@ -266,7 +264,7 @@ function AddPlayerESP(character, espColor, isSurvivor, isMinion)
                 AddHealthLabel(character)
             end
         elseif isSurvivor == false then
-            if ESP_ShowIcon == true then
+            if Player_ShowIcon == true then
                 if isMinion then
                     AddImageLabel(character.PrimaryPart, Color3.fromRGB(255,255,255), 117719382297326)
                 else
@@ -275,7 +273,7 @@ function AddPlayerESP(character, espColor, isSurvivor, isMinion)
             end
         end
 
-        if ESP_ShowDistance == true then
+        if Player_ShowDistance == true then
             AddDistanceLabel(character)
         end
     end
@@ -290,7 +288,7 @@ function AddAbilityESP(model)
         newHighlight.FillColor = Color3.fromRGB(0,0,255)
         newHighlight.Parent = model
 
-        if ESP_ShowAbilityName == true then
+        if Ability_ShowName == true then
             AddPartLabel(model, model.Name)
         end
     end
@@ -305,7 +303,7 @@ function AddItemESP(itemModel)
         newHighlight.FillColor = Color3.fromRGB(0,255,0)
         newHighlight.Parent = itemModel
 
-        if ESP_ShowItemName == true then
+        if Item_ShowName == true then
             local isModel = itemModel:IsA("Model")
             local mainPart = itemModel
 
@@ -334,7 +332,7 @@ function AddObjectiveESP(objectiveModel)
         newHighlight.FillColor = Color3.fromRGB(255, 50, 150)
         newHighlight.Parent = objectiveModel
 
-        if ESP_ShowObjectiveName == true then
+        if Objective_ShowName == true then
             AddPartLabel(mainPart, mainPart.Name)
         end
     end
@@ -457,7 +455,7 @@ function AddPartLabel(part, labelText)
 end
 
 function GiveMaxCoins()
-    while AUTOFARM_MaxCoins == true do
+    while Farm_MaxCoins == true do
         localPlayer.CoinsToGive.Value = 55
 
         task.wait()
@@ -465,7 +463,7 @@ function GiveMaxCoins()
 end
 
 function ActivateFullbright()
-    while VISUAL_Fullbright == true do
+    while Visual_Fullbright == true do
         local atmosphere = Lighting:FindFirstChild("Atmosphere")
         if atmosphere then atmosphere:Destroy() end
 
@@ -487,7 +485,7 @@ function ActivateFullbright()
 end
 
 function UpdateAntiDebris()
-    while VISUAL_AntiDebris == true do
+    while Visual_AntiDebris == true do
         local gameGui = PlayerGui:FindFirstChild("GameGui")
         if not gameGui then return end
 
@@ -566,7 +564,7 @@ function AutoMove()
 end
 
 function ToggleLobbyRadio(toggle)
-    if OTHER_MuteLobbyRadio == true then
+    if Lobby_MuteRadio == true then
         for _, sound in workspace.Lobby["Old Radio"]:GetChildren() do
             if not sound:IsA("Sound") then continue end
 
@@ -625,8 +623,8 @@ function BecomeMinion()
     end
 end
 
-function ObjectiveIncreaseInteractDistance()
-    while OBJECTIVE_IncreaseInteractDistance == true do
+function ObjectiveInteractDistance()
+    while Objective_InteractRange == true do
         local currentObjectives = GetCurrentObjectives()
 
         for _, objectiveModel in pairs(currentObjectives) do
@@ -641,8 +639,8 @@ function ObjectiveIncreaseInteractDistance()
     end
 end
 
-function ItemIncreaseInteractDistance()
-    while ITEM_IncreaseInteractDistance == true do
+function ItemInteractDistance()
+    while Item_InteractRange == true do
         local currentItems = GetCurrentItems()
 
         for _, itemModel in pairs(currentItems) do
@@ -657,13 +655,15 @@ function ItemIncreaseInteractDistance()
     end
 end
 
-function NotifyUser_NotWorking()
-    OrionLib:MakeNotification({
-        Name = "Work In Progress",
-        Content = "This feature is still being worked on, check back later.",
-        Image = "rbxassetid://4483345998",
-        Time = 2
-    })
+function NotifyUser_NotWorking(toggle)
+    if toggle == true then
+        OrionLib:MakeNotification({
+            Name = "Work In Progress",
+            Content = "This feature is still being worked on, check back later.",
+            Image = "rbxassetid://4483345998",
+            Time = 5
+        })
+    end
 end
 
 -- Tabs
@@ -704,14 +704,14 @@ local visualTab = Window:MakeTab({
 	PremiumOnly = false
 })
 
-local autofarmTab = Window:MakeTab({
+local farmTab = Window:MakeTab({
 	Name = "Farm",
 	Icon = "rbxassetid://4483345998",
 	PremiumOnly = false
 })
 
-local extraTab = Window:MakeTab({
-	Name = "Extra",
+local lobbyTab = Window:MakeTab({
+	Name = "Lobby",
 	Icon = "rbxassetid://4483345998",
 	PremiumOnly = false
 })
@@ -746,7 +746,7 @@ playerTab:AddToggle({
 	Name = "Show Distance",
 	Default = false,
 	Callback = function(Value)
-        ESP_ShowDistance = Value
+        Player_ShowDistance = Value
 	end    
 })
 
@@ -754,7 +754,7 @@ playerTab:AddToggle({
 	Name = "Show Icon",
 	Default = false,
 	Callback = function(Value)
-        ESP_ShowIcon = Value
+        Player_ShowIcon = Value
 	end    
 })
 
@@ -762,9 +762,9 @@ itemTab:AddToggle({
 	Name = "ESP Enabled",
 	Default = false,
 	Callback = function(Value)
-        ESP_Item = Value
+        Item_ESP = Value
         
-        if ESP_Item == true then
+        if Item_ESP == true then
             workspace.Server.PickUps.ChildRemoved:Connect(function(itemTaken)
                 RemoveESP(itemTaken)
             end)
@@ -780,29 +780,54 @@ itemTab:AddToggle({
 	Name = "Show Name",
 	Default = false,
 	Callback = function(Value)
-        ESP_ShowItemName = Value
+        Item_ShowName = Value
 	end    
 })
 
 itemTab:AddToggle({
-	Name = "Increase Pickup Distance",
+	Name = "Pickup Distance",
 	Default = false,
 	Callback = function(Value)
-        ITEM_IncreaseInteractDistance = Value
+        Item_InteractRange = Value
 
-        if ITEM_IncreaseInteractDistance == true then
-            ItemIncreaseInteractDistance()
+        if Item_InteractRange == true then
+            ItemInteractDistance()
         end
 	end    
+})
+
+itemTab:AddDropdown({
+	Name = "Item List",
+	Default = "None",
+	Options = {"None", "Weird Mask"},
+	Callback = function(Value)
+        Item_ItemSelected = Value
+	end    
+})
+
+itemTab:AddButton({
+	Name = "Use Selected Item",
+	Callback = function()
+        if Item_ItemSelected == "None" then
+            OrionLib:MakeNotification({
+                Name = "Item Not Selected",
+                Content = "Please select a valid item to use.",
+                Image = "rbxassetid://4483345998",
+                Time = 3
+            })
+        elseif Item_ItemSelected == "Weird Mask" then
+            BecomeMinion()
+        end
+  	end    
 })
 
 objectiveTab:AddToggle({
 	Name = "ESP Enabled",
 	Default = false,
 	Callback = function(Value)
-        ESP_Objective = Value
+        Objective_ESP = Value
 
-        if ESP_Objective == true then
+        if Objective_ESP == true then
             StartObjectiveESP()
         else
             for _, objectiveModel in pairs(GetCurrentObjectives()) do
@@ -816,18 +841,18 @@ objectiveTab:AddToggle({
 	Name = "Show Name",
 	Default = false,
 	Callback = function(Value)
-        ESP_ShowObjectiveName = Value
+        Objective_ShowName = Value
 	end    
 })
 
 objectiveTab:AddToggle({
-	Name = "Increase Interact Distance",
+	Name = "Interact Distance",
 	Default = false,
 	Callback = function(Value)
-        OBJECTIVE_IncreaseInteractDistance = Value
+        Objective_InteractRange = Value
 
-        if OBJECTIVE_IncreaseInteractDistance == true then
-            ObjectiveIncreaseInteractDistance()
+        if Objective_InteractRange == true then
+            ObjectiveInteractDistance()
         end
 	end    
 })
@@ -836,9 +861,9 @@ abilityTab:AddToggle({
 	Name = "ESP Enabled",
 	Default = false,
 	Callback = function(Value)
-        ESP_Ability = Value
+        Ability_ESP = Value
 
-        if ESP_Ability == true then
+        if Ability_ESP == true then
             StartAbilityESP()
         else
             for _, abilityModel in pairs(GetCurrentAbilities()) do
@@ -852,7 +877,7 @@ abilityTab:AddToggle({
 	Name = "Show Name",
 	Default = false,
 	Callback = function(Value)
-        ESP_ShowAbilityName = Value
+        Ability_ShowName = Value
 	end    
 })
 
@@ -860,7 +885,7 @@ abilityTab:AddToggle({
 	Name = "Auto Jump (MX)",
 	Default = false,
 	Callback = function(Value)
-
+        NotifyUser_NotWorking(Value)
 	end    
 })
 
@@ -868,24 +893,17 @@ abilityTab:AddToggle({
 	Name = "Auto Solve (Baldi)",
 	Default = false,
 	Callback = function(Value)
-        
+        NotifyUser_NotWorking(Value)
 	end    
-})
-
-itemTab:AddButton({
-	Name = "Use Weird Mask",
-	Callback = function()
-        BecomeMinion()
-  	end    
 })
 
 visualTab:AddToggle({
 	Name = "Anti Debris",
 	Default = false,
 	Callback = function(Value)
-        VISUAL_AntiDebris = Value
+        Visual_AntiDebris = Value
 
-        if VISUAL_AntiDebris == true then
+        if Visual_AntiDebris == true then
             UpdateAntiDebris()
         end
 	end    
@@ -895,33 +913,33 @@ visualTab:AddToggle({
 	Name = "Fullbright",
 	Default = false,
 	Callback = function(Value)
-        VISUAL_Fullbright = Value
+        Visual_Fullbright = Value
 
-        if VISUAL_Fullbright == true then
+        if Visual_Fullbright == true then
             ActivateFullbright()
         end
 	end    
 })
 
-autofarmTab:AddToggle({
+farmTab:AddToggle({
 	Name = "Max Coins",
 	Default = false,
 	Callback = function(Value)
-        AUTOFARM_MaxCoins = Value
+        Farm_MaxCoins = Value
 
-        if AUTOFARM_MaxCoins == true then
+        if Farm_MaxCoins == true then
             GiveMaxCoins()
         end
 	end    
 })
 
-autofarmTab:AddToggle({
+farmTab:AddToggle({
 	Name = "Auto Move (Anti-AFK)",
 	Default = false,
 	Callback = function(Value)
-        AUTOFARM_AutoMove = Value
+        Farm_AutoMove = Value
 
-        if AUTOFARM_AutoMove == true then
+        if Farm_AutoMove == true then
             RunService:BindToRenderStep("AutoMove", Enum.RenderPriority.Last.Value, AutoMove)
         else
             RunService:UnbindFromRenderStep("AutoMove")
@@ -929,17 +947,17 @@ autofarmTab:AddToggle({
 	end    
 })
 
-extraTab:AddToggle({
-	Name = "Mute Lobby Radio",
+lobbyTab:AddToggle({
+	Name = "Mute Radio",
 	Default = false,
 	Callback = function(Value)
-        OTHER_MuteLobbyRadio = Value
+        Lobby_MuteRadio = Value
 
         ToggleLobbyRadio()
 	end    
 })
 
-extraTab:AddButton({
+lobbyTab:AddButton({
 	Name = "Reset (Death)",
 	Callback = function()
         KillHumanoid()
