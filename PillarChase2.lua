@@ -260,11 +260,10 @@ function GetCurrentDoors()
 
     if foundMap then
         for _, child in foundMap:GetChildren() do
-            if child.Name ~= "Unlocked Doors" then continue end
+            local childString = child.Name:lower()
+            if not childString:find("door") then continue end
 
-            for _, doorModel in child:GetChildren() do
-                table.insert(doorTable, doorModel)
-            end
+            table.insert(doorTable, doorModel)
         end
     end
     
@@ -516,7 +515,7 @@ function ActivateFullbright()
         Lighting.FogEnd = 500000000
         Lighting.Ambient = Color3.fromRGB(255,255,255)
         Lighting.OutdoorAmbient = Color3.fromRGB(255,255,255)
-        Lighting.Brightness = 5
+        Lighting.Brightness = 1
 
         task.wait(0.25)
     end
