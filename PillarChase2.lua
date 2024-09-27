@@ -18,6 +18,7 @@ local PlayerGui = localPlayer.PlayerGui
 local ESP_Player = false
 local ESP_ShowHealth = false
 local ESP_ShowDistance = false
+local ESP_ShowIcon = false
 
 local ESP_Item = false
 local ESP_ShowItemName = false
@@ -59,6 +60,9 @@ function RemoveESP(model)
 
         local oldDistance = model:FindFirstChild("espDistance", true)
         if oldDistance then oldDistance:Destroy() end
+
+        local oldIcon = model:FindFirstChild("espIcon", true)
+        if oldIcon then oldIcon:Destroy() end
     end
 end
 
@@ -237,12 +241,8 @@ function AddPlayerESP(character, espColor, isSurvivor)
                 AddHealthLabel(character)
             end
         elseif isSurvivor == false then
-            for _, basePart in character:GetDescendants() do
-                if not basePart:IsA("BasePart") then continue end
-
-                if basePart.Transparency <= 0.5 then
-                    basePart.Transparency = 0
-                end
+            if ESP_ShowIcon == true then
+                AddImageLabel(character.PrimaryPart, Color3.fromRGB(255,0,0), 114497689901216)
             end
         end
 
@@ -315,7 +315,6 @@ function AddHealthLabel(character)
     local newHealth = Instance.new("BillboardGui")
     newHealth.Name = "espHealth"
     newHealth.Size = UDim2.new(5,0,2,0)
-
     newHealth.StudsOffset = Vector3.new(0,2.75,0)
     newHealth.AlwaysOnTop = true
     newHealth.Parent = character.Head or character.PrimaryPart
@@ -359,6 +358,24 @@ function AddHealthLabel(character)
 
     local newStroke = Instance.new("UIStroke")
     newStroke.Parent = newTextLabel
+end
+
+function AddImageLabel(part, imageColor, imageID)
+    local newIcon = Instance.new("BillboardGui")
+    newIcon.Name = "espIcon"
+    newIcon.Size = UDim2.new(2.5,0,2.5,0)
+    newIcon.AlwaysOnTop = true
+    newIcon.Parent = part
+
+    local newImageLabel = Instance.new("ImageLabel")
+    newImageLabel.AnchorPoint = Vector2.new(0.5,0.5)
+    newImageLabel.Position = UDim2.new(0.5,0,0.5,0)
+    newImageLabel.Size = UDim2.new(1,0,1,0)
+    newImageLabel.BackgroundTransparency = 1
+    newImageLabel.ImageColor3 = imageColor
+    newImageLabel.Image = `rbxassetid://{imageID}`
+    newImageLabel.ScaleType = Enum.ScaleType.Fit
+    newImageLabel.Parent = newIcon
 end
 
 function AddDistanceLabel(character)
@@ -688,6 +705,14 @@ playerTab:AddToggle({
 	Default = false,
 	Callback = function(Value)
         ESP_ShowDistance = Value
+	end    
+})
+
+playerTab:AddToggle({
+	Name = "Show Icon",
+	Default = false,
+	Callback = function(Value)
+        ESP_ShowIcon = Value
 	end    
 })
 
