@@ -493,13 +493,22 @@ end
 function ActivateFullbright()
     while Visual_Fullbright == true do
         local atmosphere = Lighting:FindFirstChild("Atmosphere")
-        if atmosphere then atmosphere:Destroy() end
+        if atmosphere then
+            atmosphere.Density = 0
+            atmosphere.Offset = 0
+            atmosphere.Glare = 0
+            atmosphere.Haze = 0
+        end
 
         local bloom = Lighting:FindFirstChild("Bloom")
-        if bloom then bloom:Destroy() end
+        if bloom then
+            bloom.Enabled = false
+        end
 
         local blur = Lighting:FindFirstChild("Blur")
-        if blur then blur:Destroy() end
+        if blur then
+            blur.Enabled = false 
+        end
 
         Lighting.GlobalShadows = false
         Lighting.ClockTime = 12
@@ -995,7 +1004,7 @@ visualTab:AddToggle({
         Visual_Fullbright = Value
 
         if Visual_Fullbright == true then
-            NotifyUser_NotWorking()
+            ActivateFullbright()
         end
 	end    
 })
