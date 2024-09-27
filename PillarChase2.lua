@@ -30,6 +30,7 @@ local Item_MaskConfirmTime = 1
 local Objective_ESP = false
 local Objective_ShowName = false
 local Objective_InteractRange = false
+local Objective_ShowIcon = false
 
 local Ability_ESP = false
 local Ability_ShowName = false
@@ -40,6 +41,8 @@ local Visual_Fullbright = false
 
 local Farm_MaxCoins = false
 local Farm_AutoMove = false
+
+local Map_DoorRange = false
 
 local Lobby_MuteRadio = false
 
@@ -231,7 +234,6 @@ function GetCurrentObjectives()
             local folderName = child.Name:lower()
     
             if folderName:find("objective") then
-                
                 for _, objectiveModel in child:GetChildren() do
                     table.insert(objectiveTable, objectiveModel)
                 end
@@ -252,6 +254,23 @@ function GetCurrentItems()
     return itemTable
 end
 
+function GetCurrentDoors()
+    local doorTable = {}
+    local foundMap = workspace:FindFirstChild("Map")
+
+    if foundMap then
+        for _, child in foundMap:GetChildren() do
+            if child.Name ~= "Unlocked Doors" then continue end
+
+            for _, doorModel in child:GetChildren() do
+                table.insert(doorTable, doorModel)
+            end
+        end
+    end
+    
+    return objectiveTable
+end
+
 function AddPlayerESP(character, espColor, isSurvivor, isMinion)
     if character then
         local newHighlight = Instance.new("Highlight")
@@ -264,6 +283,9 @@ function AddPlayerESP(character, espColor, isSurvivor, isMinion)
         if isSurvivor == true then
             if Player_ShowHealth == true then
                 AddHealthLabel(character)
+            end
+            if Player_ShowIcon then
+                AddImageLabel(character.PrimaryPart, Color3.fromRGB(0,0,255), 75665386575731)
             end
         elseif isSurvivor == false then
             if Player_ShowIcon == true then
@@ -336,6 +358,10 @@ function AddObjectiveESP(objectiveModel)
 
         if Objective_ShowName == true then
             AddPartLabel(mainPart, mainPart.Name)
+        end
+
+        if Objective_ShowIcon == true then
+            AddImageLabel(mainPart, Color3.fromRGB(255,255,255), 118495023885321)
         end
     end
 end
@@ -534,7 +560,7 @@ function UpdateAntiDebris()
             end
         end
 
-        local blindScript = localPlayer.Character:FindFirstChild("Blind")
+        local blindScript = character:FindFirstChild("Blind")
         if blindScript then blindScript:Destroy() end
         
         local foundMap = workspace:FindFirstChild("Map")
@@ -664,6 +690,22 @@ function ItemInteractDistance()
     end
 end
 
+function DoorInteractDistance()
+    while Map_DoorRange == true do
+        local currentDoors = GetCurrentItems()
+
+        for _, doorModel in pairs(currentDoors) do
+            local interactPrompt = itemModel:FindFirstChild("NAMEOFTHEPROMPTGOESHERE", true)
+
+            if interactPrompt then
+                interactPrompt.MaxActivationDistance = 17
+            end
+        end
+    
+        task.wait(0.5)
+    end
+end
+
 function SetCameraFOV(fovNumber)
     CurrentCamera.FieldOfView = fovNumber
 end
@@ -719,6 +761,12 @@ local visualTab = Window:MakeTab({
 
 local farmTab = Window:MakeTab({
 	Name = "Farm",
+	Icon = "rbxassetid://4483345998",
+	PremiumOnly = false
+})
+
+local mapTab = Window:MakeTab({
+	Name = "Map",
 	Icon = "rbxassetid://4483345998",
 	PremiumOnly = false
 })
@@ -861,6 +909,14 @@ objectiveTab:AddToggle({
 })
 
 objectiveTab:AddToggle({
+	Name = "Show Icon",
+	Default = false,
+	Callback = function(Value)
+        Objective_ShowIcon = Value
+	end    
+})
+
+objectiveTab:AddToggle({
 	Name = "Interact Distance",
 	Default = false,
 	Callback = function(Value)
@@ -939,7 +995,7 @@ visualTab:AddToggle({
         Visual_Fullbright = Value
 
         if Visual_Fullbright == true then
-            ActivateFullbright()
+            NotifyUser_NotWorking()
         end
 	end    
 })
@@ -967,6 +1023,14 @@ farmTab:AddToggle({
         else
             RunService:UnbindFromRenderStep("AutoMove")
         end
+	end    
+})
+
+mapTab:AddToggle({
+	Name = "Door Range",
+	Default = false,
+	Callback = function(Value)
+
 	end    
 })
 
