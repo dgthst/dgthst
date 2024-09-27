@@ -585,10 +585,14 @@ function BecomeMinion()
     local PickupModels = ReplicatedStorage.Assets.PickupModels
     local TurnEvilEvent = PickupModels["Weird Mask"]["Weird Mask"].SetupScript.TurnEvil
 
-    local playerIsSurvivor = character:FindFirstChild("Alive")
+    local character = localPlayer.character
 
-    if playerIsSurvivor then
-        TurnEvilEvent:FireServer()
+    if character then
+        local playerIsSurvivor = character:FindFirstChild("Alive")
+
+        if playerIsSurvivor then
+            TurnEvilEvent:FireServer()
+        end
     end
 end
 
