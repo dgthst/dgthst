@@ -15,35 +15,33 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local localPlayer = Players.LocalPlayer
 local PlayerGui = localPlayer.PlayerGui
 
-local ESP_Player = false
-local ESP_ShowHealth = false
-local ESP_ShowDistance = false
-local ESP_ShowIcon = false
+local Player_ESP = false
+local Player_ShowHealth = false
+local ESP_ShowDistance = false -- Player_ShowDistance
+local ESP_ShowIcon = false -- Player_ShowIcon
 
-local ESP_Item = false
-local ESP_ShowItemName = false
+local ESP_Item = false -- Item_ESP
+local ESP_ShowItemName = false -- Item_ShowName
 
-local ESP_Objective = false
-local ESP_ShowObjectiveName = false
+local ESP_Objective = false -- Objective_ESP
+local ESP_ShowObjectiveName = false -- Objective_ShowName
 
-local ESP_Ability = false
-local ESP_ShowAbilityName = false
+local ESP_Ability = false -- Ability_ESP
+local ESP_ShowAbilityName = false -- Ability_ShowName
 
-local VISUAL_AntiDebris = false
-local VISUAL_Fullbright = false
+local VISUAL_AntiDebris = false -- Visual_AntiDebris
+local VISUAL_Fullbright = false -- Visual_Fullbright
 
-local ABILITY_AutoJumpMX = false
+local ABILITY_AutoJumpMX = false -- Ability_AutoJumpMX
 
-local OBJECTIVE_IncreaseInteractDistance = false
+local OBJECTIVE_IncreaseInteractDistance = false -- Objective_InteractRange
 
-local ITEM_IncreaseInteractDistance = false
+local ITEM_IncreaseInteractDistance = false -- Item_InteractRange
 
-local AUTOFARM_MaxCoins = false
-local AUTOFARM_AutoMove = false
+local AUTOFARM_MaxCoins = false -- AutoFarm_MaxCoins
+local AUTOFARM_AutoMove = false -- AutoFarm_AutoMove
 
-local OTHER_MuteLobbyRadio = false
-
-local autoJumpMX_Connection = nil
+local OTHER_MuteLobbyRadio = false -- Other_MuteRadio
 
 -- Functions
 
@@ -66,8 +64,31 @@ function RemoveESP(model)
     end
 end
 
+function RemoveItemHighlight()
+    for _, itemModel in workspace.Server.PickUps:GetChildren() do
+        RemoveESP(itemModel)
+    end
+
+    for _, player in Players:GetPlayers() do
+        if not player.Character then continue end
+        if not player.Character:FindFirstChild("Backpack") then continue end
+        
+        for _, item in player.Character.Backpack:GetChildren() do
+            if not item:IsA("Model") then continue end
+            
+            RemoveESP(item)
+        end
+
+        for _, item in player.Character:GetChildren() do
+            if not item:IsA("Model") then continue end
+            
+            RemoveESP(item)
+        end
+    end
+end
+
 function StartPlayerESP()
-    while ESP_Player == true do
+    while Player_ESP == true do
         for _, player in Players:GetPlayers() do
             if player == localPlayer then continue end
 
@@ -82,7 +103,11 @@ function StartPlayerESP()
                 if playerIsSurvivor then
                     AddPlayerESP(character, Color3.fromRGB(255,255,255), true)
                 elseif playerIsKiller then
-                    AddPlayerESP(character, Color3.fromRGB(255,0,0), false)
+                    if playerIsKiller.Value == "Zombie" then
+                        AddPlayerESP(character, Color3.fromRGB(255,150,50), false, true)
+                    else
+                        AddPlayerESP(character, Color3.fromRGB(255,0,0), false, false)
+                    end
                 end
             end
         end
@@ -227,7 +252,7 @@ function GetCurrentItems()
     return itemTable
 end
 
-function AddPlayerESP(character, espColor, isSurvivor)
+function AddPlayerESP(character, espColor, isSurvivor, isMinion)
     if character then
         local newHighlight = Instance.new("Highlight")
         newHighlight.Name = "espHighlight"
@@ -237,12 +262,16 @@ function AddPlayerESP(character, espColor, isSurvivor)
         newHighlight.Parent = character
 
         if isSurvivor == true then
-            if ESP_ShowHealth == true then
+            if Player_ShowHealth == true then
                 AddHealthLabel(character)
             end
         elseif isSurvivor == false then
             if ESP_ShowIcon == true then
-                AddImageLabel(character.PrimaryPart, Color3.fromRGB(255,0,0), 114497689901216)
+                if isMinion then
+                    AddImageLabel(character.PrimaryPart, Color3.fromRGB(255,255,255), 117719382297326)
+                else
+                    AddImageLabel(character.PrimaryPart, Color3.fromRGB(255,0,0), 114497689901216)
+                end
             end
         end
 
@@ -628,6 +657,15 @@ function ItemIncreaseInteractDistance()
     end
 end
 
+function NotifyUser_NotWorking()
+    OrionLib:MakeNotification({
+        Name = "Work In Progress",
+        Content = "This feature is still being worked on, check back later.",
+        Image = "rbxassetid://4483345998",
+        Time = 2
+    })
+end
+
 -- Tabs
 
 local mainTab = Window:MakeTab({
@@ -684,9 +722,9 @@ playerTab:AddToggle({
 	Name = "ESP Enabled",
 	Default = false,
 	Callback = function(Value)
-        ESP_Player = Value
+        Player_ESP = Value
 
-        if ESP_Player == true then
+        if Player_ESP == true then
             StartPlayerESP()
         else
             for _, player in Players:GetPlayers() do
@@ -700,7 +738,7 @@ playerTab:AddToggle({
 	Name = "Show Health",
 	Default = false,
 	Callback = function(Value)
-        ESP_ShowHealth = Value
+        Player_ShowHealth = Value
 	end    
 })
 
@@ -733,26 +771,7 @@ itemTab:AddToggle({
 
             StartItemESP()
         else
-            for _, itemModel in workspace.Server.PickUps:GetChildren() do
-                RemoveESP(itemModel)
-            end
-
-            for _, player in Players:GetPlayers() do
-                if not player.Character then continue end
-                if not player.Character:FindFirstChild("Backpack") then continue end
-                
-                for _, item in player.Character.Backpack:GetChildren() do
-                    if not item:IsA("Model") then continue end
-                    
-                    RemoveESP(item)
-                end
-
-                for _, item in player.Character:GetChildren() do
-                    if not item:IsA("Model") then continue end
-                    
-                    RemoveESP(item)
-                end
-            end
+            RemoveItemHighlight()
         end
 	end    
 })
@@ -841,19 +860,7 @@ abilityTab:AddToggle({
 	Name = "Auto Jump (MX)",
 	Default = false,
 	Callback = function(Value)
-        ABILITY_AutoJumpMX = Value
 
-        if ABILITY_AutoJumpMX == true then
-            autoJumpMX_Connection = PlayerGui.DescendantAdded:Connect(function(descendantUI)
-                if descendantUI.Name == "JumpWarning" then
-                    AutoJumpMX()
-                end
-            end)
-        else
-            if autoJumpMX_Connection then
-                autoJumpMX_Connection:Disconnect()
-            end
-        end
 	end    
 })
 
