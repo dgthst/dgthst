@@ -25,6 +25,7 @@ local Item_ESP = false
 local Item_ShowName = false
 local Item_InteractRange = false
 local Item_ItemSelected = "None"
+local Item_MaskConfirmTime = 1
 
 local Objective_ESP = false
 local Objective_ShowName = false
@@ -476,7 +477,8 @@ function ActivateFullbright()
 
         Lighting.GlobalShadows = false
         Lighting.ClockTime = 12
-        Lighting.FogEnd = 50000
+        Lighting.FogStart = 10
+        Lighting.FogEnd = 500000000
         Lighting.Ambient = Color3.fromRGB(255,255,255)
         Lighting.OutdoorAmbient = Color3.fromRGB(255,255,255)
         Lighting.Brightness = 5
@@ -489,6 +491,12 @@ function UpdateAntiDebris()
     while Visual_AntiDebris == true do
         local gameGui = PlayerGui:FindFirstChild("GameGui")
         if not gameGui then return end
+
+        local character = localPlayer.Character
+        if not character then return end
+
+        local infectedUI = character:FindFirstChild("Infected", true)
+        if infectedUI then infectedUI:Destroy() end
 
         local foundFlash = gameGui:FindFirstChild("Flash")
         if foundFlash then foundFlash:Destroy() end
@@ -822,6 +830,8 @@ itemTab:AddButton({
             })
         elseif Item_ItemSelected == "Weird Mask" then
             BecomeMinion()
+            task.wait(1.5)
+            SetCameraFOV(90)
         end
   	end    
 })
@@ -887,6 +897,14 @@ abilityTab:AddToggle({
 })
 
 abilityTab:AddToggle({
+	Name = "Interact Range",
+	Default = false,
+	Callback = function(Value)
+        NotifyUser_NotWorking(Value)
+	end    
+})
+
+abilityTab:AddToggle({
 	Name = "Auto Jump (MX)",
 	Default = false,
 	Callback = function(Value)
@@ -924,13 +942,6 @@ visualTab:AddToggle({
             ActivateFullbright()
         end
 	end    
-})
-
-visualTab:AddButton({
-	Name = "Set FOV (70)",
-	Callback = function()
-        SetCameraFOV(70)
-  	end    
 })
 
 farmTab:AddToggle({
