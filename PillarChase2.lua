@@ -360,7 +360,7 @@ function AddObjectiveESP(objectiveModel)
         end
 
         if Objective_ShowIcon == true then
-            AddImageLabel(mainPart, Color3.fromRGB(255,255,255), 118495023885321)
+            AddImageLabel(mainPart, Color3.fromRGB(255,255,255), 12011030159)
         end
     end
 end
@@ -428,6 +428,7 @@ function AddImageLabel(part, imageColor, imageID)
     newImageLabel.BackgroundTransparency = 1
     newImageLabel.ImageColor3 = imageColor
     newImageLabel.Image = `rbxassetid://{imageID}`
+    newImageLabel.ImageTransparency = 0.2
     newImageLabel.ScaleType = Enum.ScaleType.Fit
     newImageLabel.Parent = newIcon
 end
