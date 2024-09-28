@@ -1,7 +1,7 @@
 -- Libraries
 
 local OrionLib = loadstring(game:HttpGet(('https://raw.githubusercontent.com/shlexware/Orion/main/source')))()
-local Window = OrionLib:MakeWindow({Name = "Pillar Chase 2", HidePremium = false, Intro = false, IntroText = "SIGMA ™", SaveConfig = false, ConfigFolder = "PC2Config"})
+local Window = OrionLib:MakeWindow({Name = "Pillar Chase Panel", HidePremium = false, Intro = false, IntroText = "SIGMA ™", SaveConfig = true, ConfigFolder = "PC2Config"})
 
 -- Services
 
@@ -16,60 +16,88 @@ local localPlayer = Players.LocalPlayer
 local PlayerGui = localPlayer.PlayerGui
 local CurrentCamera = workspace.CurrentCamera
 
-local Player_ESP = false
-local Player_ShowHealth = false
-local Player_ShowDistance = false
-local Player_ShowIcon = false
+local ESP_Enabled = false
+local ESP_ViewKiller = false
+local ESP_ViewSurvivor = false
+local ESP_ViewItem = false
+local ESP_ViewObjective = false
+local ESP_ViewAbility = false
+local ESP_ShowHighlight = false
+local ESP_ShowName = false
+local ESP_ShowIcon = false
+local ESP_ShowHealth = false
+local ESP_ShowDistance = false
+local ESP_Transparency = nil
+local ESP_RefreshRate = nil
 
-local Item_ESP = false
-local Item_ShowName = false
-local Item_InteractRange = false
-local Item_ItemSelected = "None"
-local Item_MaskConfirmTime = 1
-
-local Objective_ESP = false
-local Objective_ShowName = false
-local Objective_InteractRange = false
-local Objective_ShowIcon = false
-
-local Ability_ESP = false
-local Ability_ShowName = false
 local Ability_AutoJumpMX = false
+local Ability_AutoSolveBaldi = false
 
-local Visual_AntiDebris = false
-local Visual_Fullbright = false
+local Item_ItemSelected = nil
+
+local Graphic_AntiDebris = false
+local Graphic_Fullbright = false
+local Graphic_Brightness = nil
+
+local Interaction_Enabled = false
+local Interaction_ObjectiveRange = false
+local Interaction_ItemRange = false
+local Interaction_DoorRange = false
 
 local Farm_MaxCoins = false
 local Farm_AutoMove = false
+local Farm_AutoJump = false
 
-local Map_DoorRange = false
+local Color_Killer = nil
+local Color_Zombie = nil
+local Color_Survivor = nil
+local Color_Item = nil
+local Color_Objective = nil
+local Color_Ability = nil
 
 local Lobby_MuteRadio = false
 
+local RoleToIcon = {
+    ["Survivor"] = {
+        ["Image"] = 75665386575731;
+        ["Color"] = Color3.fromRGB(255, 255, 255);
+    };
+    ["Killer"] = {
+        ["Image"] = 114497689901216;
+        ["Color"] = Color3.fromRGB(255, 255, 255);
+    };
+    ["Zombie"] = {
+        ["Image"] = 117719382297326;
+        ["Color"] = Color3.fromRGB(255, 255, 255);
+    };
+}
+
+local refreshingESP = false
+
 -- Functions
 
-function RemoveESP(model)
+function RemoveModelESP(model)
     if model then
-        local oldHighlight = model:FindFirstChild("espHighlight", true)
-        if oldHighlight then oldHighlight:Destroy() end
+        local espHighlight = model:FindFirstChild("espHighlight", true)
+        if espHighlight then espHighlight:Destroy() end
 
-        local oldName = model:FindFirstChild("espName", true)
-        if oldName then oldName:Destroy() end
+        local espName = model:FindFirstChild("espName", true)
+        if espName then espName:Destroy() end
     
-        local oldHealth = model:FindFirstChild("espHealth", true)
-        if oldHealth then oldHealth:Destroy() end
+        local espHealth = model:FindFirstChild("espHealth", true)
+        if espHealth then espHealth:Destroy() end
 
-        local oldDistance = model:FindFirstChild("espDistance", true)
-        if oldDistance then oldDistance:Destroy() end
+        local espDistance = model:FindFirstChild("espDistance", true)
+        if espDistance then espDistance:Destroy() end
 
-        local oldIcon = model:FindFirstChild("espIcon", true)
-        if oldIcon then oldIcon:Destroy() end
+        local espIcon = model:FindFirstChild("espIcon", true)
+        if espIcon then espIcon:Destroy() end
     end
 end
 
-function RemoveItemHighlight()
+function RemoveItemESP()
     for _, itemModel in workspace.Server.PickUps:GetChildren() do
-        RemoveESP(itemModel)
+        RemoveModelESP(itemModel)
     end
 
     for _, player in Players:GetPlayers() do
@@ -79,84 +107,298 @@ function RemoveItemHighlight()
         for _, item in player.Character.Backpack:GetChildren() do
             if not item:IsA("Model") then continue end
             
-            RemoveESP(item)
+            RemoveModelESP(item)
         end
 
         for _, item in player.Character:GetChildren() do
             if not item:IsA("Model") then continue end
             
-            RemoveESP(item)
+            RemoveModelESP(item)
         end
     end
 end
 
-function StartPlayerESP()
-    while Player_ESP == true do
+function RemoveGlobalESP()
+    RemoveItemESP()
+
+    for _, objectiveModel in pairs(GetCurrentObjectives()) do
+        RemoveModelESP(objectiveModel)
+    end
+
+    for _, abilityModel in pairs(GetCurrentAbilities()) do
+        RemoveModelESP(abilityModel)
+    end
+    
+    for _, player in Players:GetPlayers() do
+        RemoveModelESP(player.Character)
+    end
+end
+
+function StartESP()
+    while ESP_Enabled == true do
+        RefreshESP()
+
+        task.wait(ESP_RefreshRate)
+    end
+end
+
+function RefreshESP()
+    if refreshingESP == true then return end
+    refreshingESP = true
+
+    RemoveGlobalESP()
+
+    if ESP_ViewKiller == true then
         for _, player in Players:GetPlayers() do
             if player == localPlayer then continue end
 
             local character = player.Character
+            if not character then return end
+            
+            local playerIsKiller = character:FindFirstChild("MonsterNameValue")
 
-            RemoveESP(character)
+            if playerIsKiller then
+                RemoveModelESP(character)
 
-            if character then
-                local playerIsSurvivor = character:FindFirstChild("Alive")
-                local playerIsKiller = character:FindFirstChild("MonsterNameValue")
-
-                if playerIsSurvivor then
-                    AddPlayerESP(character, Color3.fromRGB(255,255,255), true)
-                elseif playerIsKiller then
-                    if playerIsKiller.Value == "Zombie" then
-                        AddPlayerESP(character, Color3.fromRGB(255,150,50), false, true)
-                    else
-                        AddPlayerESP(character, Color3.fromRGB(255,0,0), false, false)
-                    end
+                if playerIsKiller.Value == "Zombie" then
+                    AddPlayerESP(character, Color_Zombie, "Zombie")
+                else
+                    AddPlayerESP(character, Color_Killer, "Killer")
                 end
             end
         end
-    
-        task.wait(0.1)
     end
-end
 
-function StartItemESP()
-    while Item_ESP == true do
+    if ESP_ViewSurvivor == true then
+        for _, player in Players:GetPlayers() do
+            if player == localPlayer then continue end
+
+            local character = player.Character
+            if not character then return end
+            
+            local playerIsSurvivor = character:FindFirstChild("Alive")
+
+            if playerIsSurvivor then
+                RemoveModelESP(character)
+                AddPlayerESP(character, Color_Survivor, "Survivor")
+            end
+        end
+    end
+
+    if ESP_ViewItem == true then
         for _, itemModel in workspace.Server.PickUps:GetChildren() do
-            RemoveESP(itemModel)
+            RemoveModelESP(itemModel)
             AddItemESP(itemModel)
         end
-    
-        task.wait(0.2)
     end
-end
 
-function StartObjectiveESP()
-    while Objective_ESP == true do
+    if ESP_ViewObjective == true then
         local currentObjectives = GetCurrentObjectives()
 
-        for _, objectiveModel in pairs(currentObjectives) do
-            RemoveESP(objectiveModel)
+        for _, objectiveInstance in pairs(currentObjectives) do
+            RemoveModelESP(objectiveInstance)
 
-            if not objectiveModel:FindFirstChild("ObjectivePrompt", true) then continue end
+            if not objectiveInstance:FindFirstChild("ObjectivePrompt", true) then continue end
 
-            AddObjectiveESP(objectiveModel)
+            if objectiveInstance:IsA("Model") then
+                local mainPart = objectiveInstance.PrimaryPart or objectiveInstance:FindFirstChildOfClass("BasePart")
+                AddObjectiveESP(mainPart, objectiveInstance.Name)
+            else
+                AddObjectiveESP(objectiveInstance, objectiveInstance.Name)
+            end                
         end
-    
-        task.wait(0.5)
     end
-end
 
-function StartAbilityESP()
-    while Ability_ESP == true do
+    if ESP_ViewAbility == true then
         local currentAbilities = GetCurrentAbilities()
 
         for _, abilityModel in pairs(currentAbilities) do
-            RemoveESP(abilityModel)
+            RemoveModelESP(abilityModel)
             AddAbilityESP(abilityModel)
         end
-
-        task.wait(0.1)
     end
+
+    refreshingESP = false
+end
+
+function CreateESPHighlight(parentInstance, espColor)
+    local newHighlight = Instance.new("Highlight")
+    newHighlight.Name = "espHighlight"
+    newHighlight.FillColor = espColor
+    newHighlight.FillTransparency = 0.8
+    newHighlight.OutlineTransparency = 0.2
+    newHighlight.OutlineColor = Color3.fromRGB(0, 0, 0)
+    newHighlight.Parent = parentInstance
+end
+
+function AddPlayerESP(character, espColor, roleType)
+    CreateESPHighlight(character, espColor)
+
+        if ESP_ShowHealth == true then
+            if roleType == "Survivor" then
+                AddHealthLabel(character)
+            end
+        end
+
+        if ESP_ShowIcon then
+            AddImageLabel(character.PrimaryPart, RoleToIcon[roleType].Color, RoleToIcon[roleType].Image)
+        end
+
+        if ESP_ShowDistance == true then
+            AddDistanceLabel(character)
+        end
+end
+
+function AddItemESP(itemModel)
+    CreateESPHighlight(itemModel, Color_Item)
+
+        if ESP_ShowName == true then
+            local isModel = itemModel:IsA("Model")
+            local mainPart = itemModel
+
+            if isModel then
+                mainPart = itemModel.PrimaryPart
+            end
+
+            AddPartLabel(mainPart, itemModel.Name)
+        end
+end
+
+function AddObjectiveESP(objectivePart, objectiveName)
+        CreateESPHighlight(objectivePart, Color_Objective)
+
+        if ESP_ShowName == true then
+            AddPartLabel(objectivePart, objectiveName)
+        end
+
+        if ESP_ShowIcon == true then
+            AddImageLabel(mainPart, Color3.fromRGB(255, 255, 255), 12011030159)
+        end
+end
+
+function AddAbilityESP(model)
+    CreateESPHighlight(model, Color_Ability)
+
+    if ESP_ShowName == true then
+        AddPartLabel(model, model.Name)
+    end
+end
+
+function AddHealthLabel(character)
+    local newHealth = Instance.new("BillboardGui")
+    newHealth.Name = "espHealth"
+    newHealth.Size = UDim2.new(5,0,2,0)
+    newHealth.StudsOffset = Vector3.new(0,2.75,0)
+    newHealth.AlwaysOnTop = true
+    newHealth.Parent = character.Head or character.PrimaryPart
+
+    local newFrameBackground = Instance.new("Frame")
+    newFrameBackground.AnchorPoint = Vector2.new(0.5,0.5)
+    newFrameBackground.Position = UDim2.new(0.5,0,0.8,0)
+    newFrameBackground.Size = UDim2.new(0.6,0,0.1,0)
+    newFrameBackground.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    newFrameBackground.Parent = newHealth
+    
+    local newStroke = Instance.new("UIStroke")
+    newStroke.Parent = newFrameBackground
+
+    local StatFolder = character.Aspects
+    local currentHealth = StatFolder.Health
+    local maxHealth = currentHealth.Max
+
+    local calculatedSize = currentHealth.Value/maxHealth.Value or 0
+
+    local newFrameFiller = Instance.new("Frame")
+    newFrameFiller.AnchorPoint = Vector2.new(0,0.5)
+    newFrameFiller.Position = UDim2.new(0,0,0.5,0)
+    newFrameFiller.Size = UDim2.new(calculatedSize,0,1,0)
+    newFrameFiller.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+    newFrameFiller.Parent = newFrameBackground
+
+    local newStroke = Instance.new("UIStroke")
+    newStroke.Parent = newFrameFiller
+
+    local newTextLabel = Instance.new("TextLabel")
+    newTextLabel.AnchorPoint = Vector2.new(0.5,0.5)
+    newTextLabel.Position = UDim2.new(0.5,0,0.4,0)
+    newTextLabel.Size = UDim2.new(1,0,1,0)
+    newTextLabel.BackgroundTransparency = 1
+    newTextLabel.TextScaled = true
+    newTextLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    newTextLabel.Font = Enum.Font.Montserrat.Value
+    newTextLabel.Text = `❤️ {math.round(currentHealth.Value)}`
+    newTextLabel.Parent = newHealth
+
+    local newStroke = Instance.new("UIStroke")
+    newStroke.Parent = newTextLabel
+end
+
+function AddImageLabel(part, imageColor, imageID)
+    local newIcon = Instance.new("BillboardGui")
+    newIcon.Name = "espIcon"
+    newIcon.Size = UDim2.new(2.5,0,2.5,0)
+    newIcon.AlwaysOnTop = true
+    newIcon.Parent = part
+
+    local newImageLabel = Instance.new("ImageLabel")
+    newImageLabel.AnchorPoint = Vector2.new(0.5,0.5)
+    newImageLabel.Position = UDim2.new(0.5,0,0.5,0)
+    newImageLabel.Size = UDim2.new(1,0,1,0)
+    newImageLabel.BackgroundTransparency = 1
+    newImageLabel.ImageColor3 = imageColor
+    newImageLabel.Image = `rbxassetid://{imageID}`
+    newImageLabel.ImageTransparency = 0.2
+    newImageLabel.ScaleType = Enum.ScaleType.Fit
+    newImageLabel.Parent = newIcon
+end
+
+function AddDistanceLabel(character)
+    local newDistance = Instance.new("BillboardGui")
+    newDistance.Name = "espDistance"
+    newDistance.Size = UDim2.new(5,0,2,0)
+
+    newDistance.StudsOffset = Vector3.new(0,0.5,0)
+    newDistance.AlwaysOnTop = true
+    newDistance.Parent = character.PrimaryPart
+
+    local calculatedDistance = (localPlayer.Character.PrimaryPart.Position - character.PrimaryPart.Position).Magnitude or 0
+
+    local newTextLabel = Instance.new("TextLabel")
+    newTextLabel.AnchorPoint = Vector2.new(0.5,0.5)
+    newTextLabel.Position = UDim2.new(0.5,0,0.5,0)
+    newTextLabel.Size = UDim2.new(1,0,1,0)
+    newTextLabel.BackgroundTransparency = 1
+    newTextLabel.TextScaled = true
+    newTextLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    newTextLabel.Font = Enum.Font.Montserrat.Value
+    newTextLabel.Text = `↔ {math.round(calculatedDistance)}`
+    newTextLabel.Parent = newDistance
+
+    local newStroke = Instance.new("UIStroke")
+    newStroke.Parent = newTextLabel
+end
+
+function AddPartLabel(part, labelText)
+    local newName = Instance.new("BillboardGui")
+    newName.Name = "espName"
+    newName.Size = UDim2.new(20,0,1,0)
+    newName.StudsOffset = Vector3.new(0,1.5,0)
+    newName.AlwaysOnTop = true
+    newName.Parent = part
+
+    local newTextLabel = Instance.new("TextLabel")
+    newTextLabel.AnchorPoint = Vector2.new(0.5,0.5)
+    newTextLabel.Position = UDim2.new(0.5,0,0.5,0)
+    newTextLabel.Size = UDim2.new(1,0,1,0)
+    newTextLabel.BackgroundTransparency = 1
+    newTextLabel.TextScaled = true
+    newTextLabel.TextColor3 = Color3.fromRGB(255,255,255)
+    newTextLabel.Font = Enum.Font.Montserrat.Value
+    newTextLabel.Text = labelText
+    newTextLabel.Parent = newName
+
+    local newStroke = Instance.new("UIStroke")
+    newStroke.Parent = newTextLabel
 end
 
 function GetCurrentAbilities()
@@ -164,45 +406,47 @@ function GetCurrentAbilities()
     local foundMap = workspace:FindFirstChild("Map")
 
     for _, child in workspace:GetChildren() do
-        if child.Name == "SpiderSkull" then
+        if child.Name == "SpiderSkull" or child.Name == "Spider Skull" then
+            child.Name = "Spider Skull"
             table.insert(abilityTable, child)
         end
     end
     
     if foundMap then
         for _, child in foundMap:GetChildren() do
-            if child.Name == "NoteBook" then
+            if child.Name == "NoteBook" or child.Name == "Notebook" then
+                child.Name = "Notebook"
                 table.insert(abilityTable, child)
             end
             
-            if child:FindFirstChild("ECT") and child:FindFirstChild("HeadAI") then
+            if (child:FindFirstChild("ECT") and child:FindFirstChild("HeadAI")) or child.Name == "Lurking Facade" then
                 child.Name = "Lurking Facade"
                 table.insert(abilityTable, child)
             end
 
             local foundForestKingProjectile = child.Name:lower()
-            if foundForestKingProjectile:find("projectile") then
+            if foundForestKingProjectile:find("projectile") or child.Name == "Glitching Blitz" then
                 child.Name = "Glitching Blitz"
                 table.insert(abilityTable, child)
             end
 
-            if child.Name == "EXEVINES" then
+            if child.Name == "EXEVINES" or child.Name == "EXE Vines" then
                 child.Name = "EXE Vines"
                 table.insert(abilityTable, child)
             end
 
-            if child.Name == "NiloPuddle" then
+            if child.Name == "NiloPuddle" or child.Name == "Radiation" then
                 child.Name = "Radiation"
                 table.insert(abilityTable, child)
             end
 
             local foundWYSTBomb = child.Name:lower()
-            if foundWYSTBomb:find("bomb") then
+            if foundWYSTBomb:find("bomb") or child.Name == "Bomb" then
                 child.Name = "Bomb"
                 table.insert(abilityTable, child)
             end
 
-            if child.Name == "HearingTape" then
+            if child.Name == "HearingTape" or child.Name == "Hearing Tape" then
                 child.Name = "Hearing Tape"
                 table.insert(abilityTable, child)
             end
@@ -213,7 +457,7 @@ function GetCurrentAbilities()
         if samsoniteMap then
             for _, realDoor in samsoniteMap.DoorBank:GetChildren() do
                 if realDoor.DoorPrompt.Enabled == true then
-                    realDoor.Name = "Real Door"
+                    realDoor.Name = "Escape"
                     table.insert(abilityTable, realDoor)
                 end
             end
@@ -261,228 +505,17 @@ function GetCurrentDoors()
     if foundMap then
         for _, child in foundMap:GetChildren() do
             local childString = child.Name:lower()
-            if not childString:find("door") then continue end
 
-            table.insert(doorTable, doorModel)
+            if childString:find("door") then
+                table.insert(doorTable, doorModel)
+            end
         end
     end
     
     return objectiveTable
 end
 
-function AddPlayerESP(character, espColor, isSurvivor, isMinion)
-    if character then
-        local newHighlight = Instance.new("Highlight")
-        newHighlight.Name = "espHighlight"
-        newHighlight.FillTransparency = 0.8
-        newHighlight.OutlineColor = Color3.fromRGB(0,0,0)
-        newHighlight.FillColor = espColor
-        newHighlight.Parent = character
-
-        if isSurvivor == true then
-            if Player_ShowHealth == true then
-                AddHealthLabel(character)
-            end
-            if Player_ShowIcon then
-                AddImageLabel(character.PrimaryPart, Color3.fromRGB(0,0,255), 75665386575731)
-            end
-        elseif isSurvivor == false then
-            if Player_ShowIcon == true then
-                if isMinion then
-                    AddImageLabel(character.PrimaryPart, Color3.fromRGB(255,255,255), 117719382297326)
-                else
-                    AddImageLabel(character.PrimaryPart, Color3.fromRGB(255,0,0), 114497689901216)
-                end
-            end
-        end
-
-        if Player_ShowDistance == true then
-            AddDistanceLabel(character)
-        end
-    end
-end
-
-function AddAbilityESP(model)
-    if model then
-        local newHighlight = Instance.new("Highlight")
-        newHighlight.Name = "espHighlight"
-        newHighlight.FillTransparency = 0.6
-        newHighlight.OutlineColor = Color3.fromRGB(0,0,0)
-        newHighlight.FillColor = Color3.fromRGB(0,0,255)
-        newHighlight.Parent = model
-
-        if Ability_ShowName == true then
-            AddPartLabel(model, model.Name)
-        end
-    end
-end
-
-function AddItemESP(itemModel)
-    if itemModel then
-        local newHighlight = Instance.new("Highlight")
-        newHighlight.Name = "espHighlight"
-        newHighlight.FillTransparency = 0.8
-        newHighlight.OutlineColor = Color3.fromRGB(0,0,0)
-        newHighlight.FillColor = Color3.fromRGB(0,255,0)
-        newHighlight.Parent = itemModel
-
-        if Item_ShowName == true then
-            local isModel = itemModel:IsA("Model")
-            local mainPart = itemModel
-
-            if isModel then
-                mainPart = isModel.PrimaryPart
-            end
-
-            AddPartLabel(mainPart, itemModel.Name)
-        end
-    end
-end
-
-function AddObjectiveESP(objectiveModel)
-    if objectiveModel then
-        local isModel = objectiveModel:IsA("Model")
-        local mainPart = objectiveModel
-
-        if isModel then
-            mainPart = objectiveModel.PrimaryPart or objectiveModel:FindFirstChildOfClass("BasePart")
-        end
-        
-        local newHighlight = Instance.new("Highlight")
-        newHighlight.Name = "espHighlight"
-        newHighlight.FillTransparency = 0.6
-        newHighlight.OutlineColor = Color3.fromRGB(0,0,0)
-        newHighlight.FillColor = Color3.fromRGB(255, 50, 150)
-        newHighlight.Parent = objectiveModel
-
-        if Objective_ShowName == true then
-            AddPartLabel(mainPart, mainPart.Name)
-        end
-
-        if Objective_ShowIcon == true then
-            AddImageLabel(mainPart, Color3.fromRGB(255,255,255), 12011030159)
-        end
-    end
-end
-
-function AddHealthLabel(character)
-    local newHealth = Instance.new("BillboardGui")
-    newHealth.Name = "espHealth"
-    newHealth.Size = UDim2.new(5,0,2,0)
-    newHealth.StudsOffset = Vector3.new(0,2.75,0)
-    newHealth.AlwaysOnTop = true
-    newHealth.Parent = character.Head or character.PrimaryPart
-
-    local newFrameBackground = Instance.new("Frame")
-    newFrameBackground.AnchorPoint = Vector2.new(0.5,0.5)
-    newFrameBackground.Position = UDim2.new(0.5,0,0.8,0)
-    newFrameBackground.Size = UDim2.new(0.6,0,0.1,0)
-    newFrameBackground.BackgroundColor3 = Color3.fromRGB(0,0,0)
-    newFrameBackground.Parent = newHealth
-    
-    local newStroke = Instance.new("UIStroke")
-    newStroke.Parent = newFrameBackground
-
-    local StatFolder = character.Aspects
-    local currentHealth = StatFolder.Health
-    local maxHealth = currentHealth.Max
-
-    local calculatedSize = currentHealth.Value/maxHealth.Value or 0
-
-    local newFrameFiller = Instance.new("Frame")
-    newFrameFiller.AnchorPoint = Vector2.new(0,0.5)
-    newFrameFiller.Position = UDim2.new(0,0,0.5,0)
-    newFrameFiller.Size = UDim2.new(calculatedSize,0,1,0)
-    newFrameFiller.BackgroundColor3 = Color3.fromRGB(0,255,0)
-    newFrameFiller.Parent = newFrameBackground
-
-    local newStroke = Instance.new("UIStroke")
-    newStroke.Parent = newFrameFiller
-
-    local newTextLabel = Instance.new("TextLabel")
-    newTextLabel.AnchorPoint = Vector2.new(0.5,0.5)
-    newTextLabel.Position = UDim2.new(0.5,0,0.4,0)
-    newTextLabel.Size = UDim2.new(1,0,1,0)
-    newTextLabel.BackgroundTransparency = 1
-    newTextLabel.TextScaled = true
-    newTextLabel.TextColor3 = Color3.fromRGB(255,255,255)
-    newTextLabel.Font = Enum.Font.Montserrat.Value
-    newTextLabel.Text = `❤️ {math.round(currentHealth.Value)}`
-    newTextLabel.Parent = newHealth
-
-    local newStroke = Instance.new("UIStroke")
-    newStroke.Parent = newTextLabel
-end
-
-function AddImageLabel(part, imageColor, imageID)
-    local newIcon = Instance.new("BillboardGui")
-    newIcon.Name = "espIcon"
-    newIcon.Size = UDim2.new(2.5,0,2.5,0)
-    newIcon.AlwaysOnTop = true
-    newIcon.Parent = part
-
-    local newImageLabel = Instance.new("ImageLabel")
-    newImageLabel.AnchorPoint = Vector2.new(0.5,0.5)
-    newImageLabel.Position = UDim2.new(0.5,0,0.5,0)
-    newImageLabel.Size = UDim2.new(1,0,1,0)
-    newImageLabel.BackgroundTransparency = 1
-    newImageLabel.ImageColor3 = imageColor
-    newImageLabel.Image = `rbxassetid://{imageID}`
-    newImageLabel.ImageTransparency = 0.2
-    newImageLabel.ScaleType = Enum.ScaleType.Fit
-    newImageLabel.Parent = newIcon
-end
-
-function AddDistanceLabel(character)
-    local newDistance = Instance.new("BillboardGui")
-    newDistance.Name = "espDistance"
-    newDistance.Size = UDim2.new(5,0,2,0)
-
-    newDistance.StudsOffset = Vector3.new(0,0.5,0)
-    newDistance.AlwaysOnTop = true
-    newDistance.Parent = character.PrimaryPart
-
-    local calculatedDistance = (localPlayer.Character.PrimaryPart.Position - character.PrimaryPart.Position).Magnitude or 0
-
-    local newTextLabel = Instance.new("TextLabel")
-    newTextLabel.AnchorPoint = Vector2.new(0.5,0.5)
-    newTextLabel.Position = UDim2.new(0.5,0,0.5,0)
-    newTextLabel.Size = UDim2.new(1,0,1,0)
-    newTextLabel.BackgroundTransparency = 1
-    newTextLabel.TextScaled = true
-    newTextLabel.TextColor3 = Color3.fromRGB(255,255,255)
-    newTextLabel.Font = Enum.Font.Montserrat.Value
-    newTextLabel.Text = `↔ {math.round(calculatedDistance)}`
-    newTextLabel.Parent = newDistance
-
-    local newStroke = Instance.new("UIStroke")
-    newStroke.Parent = newTextLabel
-end
-
-function AddPartLabel(part, labelText)
-    local newName = Instance.new("BillboardGui")
-    newName.Name = "espName"
-    newName.Size = UDim2.new(20,0,1,0)
-    newName.StudsOffset = Vector3.new(0,1.5,0)
-    newName.AlwaysOnTop = true
-    newName.Parent = part
-
-    local newTextLabel = Instance.new("TextLabel")
-    newTextLabel.AnchorPoint = Vector2.new(0.5,0.5)
-    newTextLabel.Position = UDim2.new(0.5,0,0.5,0)
-    newTextLabel.Size = UDim2.new(1,0,1,0)
-    newTextLabel.BackgroundTransparency = 1
-    newTextLabel.TextScaled = true
-    newTextLabel.TextColor3 = Color3.fromRGB(255,255,255)
-    newTextLabel.Font = Enum.Font.Montserrat.Value
-    newTextLabel.Text = labelText
-    newTextLabel.Parent = newName
-
-    local newStroke = Instance.new("UIStroke")
-    newStroke.Parent = newTextLabel
-end
-
-function GiveMaxCoins()
+function GetMaxCoins()
     while Farm_MaxCoins == true do
         localPlayer.CoinsToGive.Value = 55
 
@@ -491,7 +524,7 @@ function GiveMaxCoins()
 end
 
 function ActivateFullbright()
-    while Visual_Fullbright == true do
+    while Graphic_Fullbright == true do
         local atmosphere = Lighting:FindFirstChild("Atmosphere")
         if atmosphere then
             atmosphere.Density = 0
@@ -514,16 +547,16 @@ function ActivateFullbright()
         Lighting.ClockTime = 12
         Lighting.FogStart = 10
         Lighting.FogEnd = 500000000
-        Lighting.Ambient = Color3.fromRGB(255,255,255)
-        Lighting.OutdoorAmbient = Color3.fromRGB(255,255,255)
-        Lighting.Brightness = 1
+        Lighting.Ambient = Color3.fromRGB(255, 255, 255)
+        Lighting.OutdoorAmbient = Color3.fromRGB(255, 255, 255)
+        Lighting.Brightness = Graphic_Brightness
 
         task.wait(0.25)
     end
 end
 
-function UpdateAntiDebris()
-    while Visual_AntiDebris == true do
+function ActivateAntiDebris()
+    while Graphic_AntiDebris == true do
         local gameGui = PlayerGui:FindFirstChild("GameGui")
         if not gameGui then return end
 
@@ -587,27 +620,42 @@ function UpdateAntiDebris()
 end
 
 function AutoMove()
-    local currentDirection = os.time() % 4
     local character = localPlayer.Character
+    if not character then return end
 
-    if character then
-        local humanoid = character:FindFirstChildOfClass("Humanoid")
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    if not humanoid then return end
 
-        if humanoid then
-            if currentDirection == 0 then
-                localPlayer.Character.Humanoid:Move(Vector3.new(0, 0, -1), true)
-            elseif currentDirection == 1 then
-                localPlayer.Character.Humanoid:Move(Vector3.new(1, 0, 0), true)
-            elseif currentDirection == 2 then
-                localPlayer.Character.Humanoid:Move(Vector3.new(0, 0, 1), true)
-            else
-                localPlayer.Character.Humanoid:Move(Vector3.new(-1, 0, 0), true)
-            end
-        end
+    local currentDirection = os.time() % 4
+
+    if currentDirection == 0 then
+        localPlayer.Character.Humanoid:Move(Vector3.new(0, 0, -1), true)
+    elseif currentDirection == 1 then
+        localPlayer.Character.Humanoid:Move(Vector3.new(1, 0, 0), true)
+    elseif currentDirection == 2 then
+        localPlayer.Character.Humanoid:Move(Vector3.new(0, 0, 1), true)
+    elseif currentDirection == 3 then
+        localPlayer.Character.Humanoid:Move(Vector3.new(-1, 0, 0), true)
     end
 end
 
-function ToggleLobbyRadio(toggle)
+function AutoJump()
+    while Farm_AutoJump == true do
+        local character = localPlayer.Character
+        if not character then return end
+
+        local humanoid = character:FindFirstChildOfClass("Humanoid")
+        if not humanoid then return end
+
+        if humanoid.FloorMaterial ~= Enum.Material.Air then
+            humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+        end
+
+        task.wait(1.75)
+    end
+end
+
+function ToggleLobbyRadio()
     if Lobby_MuteRadio == true then
         for _, sound in workspace.Lobby["Old Radio"]:GetChildren() do
             if not sound:IsA("Sound") then continue end
@@ -642,72 +690,64 @@ function KillHumanoid()
     end
 end
 
-function AutoJumpMX()
-    local character = localPlayer.Character
-
-    if character then
-        local humanoid = character:FindFirstChildOfClass("Humanoid")
-        print(humanoid)
-        humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
-    end
-end
-
-function BecomeMinion()
+function BecomeZombie()
     local PickupModels = ReplicatedStorage.Assets.PickupModels
     local TurnEvilEvent = PickupModels["Weird Mask"]["Weird Mask"].SetupScript.TurnEvil
 
     local character = localPlayer.character
+    if not character then return end
 
-    if character then
-        local playerIsSurvivor = character:FindFirstChild("Alive")
+    local playerIsSurvivor = character:FindFirstChild("Alive")
 
-        if playerIsSurvivor then
-            TurnEvilEvent:FireServer()
-        end
+    if playerIsSurvivor then
+        TurnEvilEvent:FireServer()
+        task.wait(1.5)
+        SetCameraFOV(90)
+    else
+        OrionLib:MakeNotification({
+            Name = "Not Allowed",
+            Content = "You need to be a survivor to use this.",
+            Image = "rbxassetid://96055863684080",
+            Time = 3
+        })
     end
 end
 
-function ObjectiveInteractDistance()
-    while Objective_InteractRange == true do
-        local currentObjectives = GetCurrentObjectives()
+function MaximizeInteractDistance()
+    while Interaction_Enabled == true do
+        if Interaction_ObjectiveRange == true then
+            local currentObjectives = GetCurrentObjectives()
 
-        for _, objectiveModel in pairs(currentObjectives) do
-            local interactPrompt = objectiveModel:FindFirstChild("ObjectivePrompt", true)
-
-            if interactPrompt then
-                interactPrompt.MaxActivationDistance = 11
+            for _, objectiveModel in pairs(currentObjectives) do
+                local interactPrompt = objectiveModel:FindFirstChild("ObjectivePrompt", true)
+    
+                if interactPrompt then
+                    interactPrompt.MaxActivationDistance = 11
+                end
             end
         end
+
+        if interaction_ItemRange == true then
+            local currentItems = GetCurrentItems()
+
+            for _, itemModel in pairs(currentItems) do
+                local interactPrompt = itemModel:FindFirstChild("ProximityPrompt", true)
     
-        task.wait(0.5)
-    end
-end
-
-function ItemInteractDistance()
-    while Item_InteractRange == true do
-        local currentItems = GetCurrentItems()
-
-        for _, itemModel in pairs(currentItems) do
-            local interactPrompt = itemModel:FindFirstChild("ProximityPrompt", true)
-
-            if interactPrompt then
-                interactPrompt.MaxActivationDistance = 8
+                if interactPrompt then
+                    interactPrompt.MaxActivationDistance = 8
+                end
             end
         end
+
+        if Interaction_DoorRange == true then
+            local currentDoors = GetCurrentItems()
+
+            for _, doorModel in pairs(currentDoors) do
+                local interactPrompt = itemModel:FindFirstChild("NAMEOFTHEPROMPTGOESHERE", true)
     
-        task.wait(0.5)
-    end
-end
-
-function DoorInteractDistance()
-    while Map_DoorRange == true do
-        local currentDoors = GetCurrentItems()
-
-        for _, doorModel in pairs(currentDoors) do
-            local interactPrompt = itemModel:FindFirstChild("NAMEOFTHEPROMPTGOESHERE", true)
-
-            if interactPrompt then
-                interactPrompt.MaxActivationDistance = 17
+                if interactPrompt then
+                    interactPrompt.MaxActivationDistance = 17
+                end
             end
         end
     
@@ -719,12 +759,12 @@ function SetCameraFOV(fovNumber)
     CurrentCamera.FieldOfView = fovNumber
 end
 
-function NotifyUser_NotWorking(toggle)
+function WorkInProgressNotification(toggle)
     if toggle == true then
         OrionLib:MakeNotification({
             Name = "Work In Progress",
             Content = "This feature is still being worked on, check back later.",
-            Image = "rbxassetid://4483345998",
+            Image = "rbxassetid://96055863684080",
             Time = 5
         })
     end
@@ -738,32 +778,32 @@ local mainTab = Window:MakeTab({
 	PremiumOnly = false
 })
 
-local playerTab = Window:MakeTab({
-	Name = "Player",
+local espTab = Window:MakeTab({
+	Name = "ESP",
 	Icon = "rbxassetid://4483345998",
 	PremiumOnly = false
 })
 
 local abilityTab = Window:MakeTab({
-	Name = "Ability",
+	Name = "Abilities",
 	Icon = "rbxassetid://4483345998",
 	PremiumOnly = false
 })
 
 local itemTab = Window:MakeTab({
-	Name = "Item",
+	Name = "Items",
 	Icon = "rbxassetid://4483345998",
 	PremiumOnly = false
 })
 
-local objectiveTab = Window:MakeTab({
-	Name = "Objective",
+local interactionTab = Window:MakeTab({
+	Name = "Interaction",
 	Icon = "rbxassetid://4483345998",
 	PremiumOnly = false
 })
 
-local visualTab = Window:MakeTab({
-	Name = "Visual",
+local graphicTab = Window:MakeTab({
+	Name = "Graphics",
 	Icon = "rbxassetid://4483345998",
 	PremiumOnly = false
 })
@@ -774,99 +814,216 @@ local farmTab = Window:MakeTab({
 	PremiumOnly = false
 })
 
-local mapTab = Window:MakeTab({
-	Name = "Map",
-	Icon = "rbxassetid://4483345998",
-	PremiumOnly = false
-})
-
 local lobbyTab = Window:MakeTab({
 	Name = "Lobby",
 	Icon = "rbxassetid://4483345998",
 	PremiumOnly = false
 })
 
--- Toggles
+local colorTab = Window:MakeTab({
+	Name = "Color",
+	Icon = "rbxassetid://4483345998",
+	PremiumOnly = false
+})
 
-playerTab:AddToggle({
+local helpTab = Window:MakeTab({
+	Name = "Help",
+	Icon = "rbxassetid://4483345998",
+	PremiumOnly = false
+})
+
+-- Orion UI
+
+mainTab:AddParagraph(`This GUI covers nearly everything possible on the client-side.`,"Version 2.0")
+
+--[----]--
+
+local espToggleSection = espTab:AddSection({
+	Name = "Toggle"
+})
+
+espToggleSection:AddToggle({
 	Name = "ESP Enabled",
 	Default = false,
 	Callback = function(Value)
-        Player_ESP = Value
+        ESP_Enabled = Value
 
-        if Player_ESP == true then
-            StartPlayerESP()
-        else
-            for _, player in Players:GetPlayers() do
-                RemoveESP(player.Character)
-            end
-        end
-	end    
-})
-
-playerTab:AddToggle({
-	Name = "Show Health",
-	Default = false,
-	Callback = function(Value)
-        Player_ShowHealth = Value
-	end    
-})
-
-playerTab:AddToggle({
-	Name = "Show Distance",
-	Default = false,
-	Callback = function(Value)
-        Player_ShowDistance = Value
-	end    
-})
-
-playerTab:AddToggle({
-	Name = "Show Icon",
-	Default = false,
-	Callback = function(Value)
-        Player_ShowIcon = Value
-	end    
-})
-
-itemTab:AddToggle({
-	Name = "ESP Enabled",
-	Default = false,
-	Callback = function(Value)
-        Item_ESP = Value
-        
-        if Item_ESP == true then
+        if ESP_Enabled == true then
             workspace.Server.PickUps.ChildRemoved:Connect(function(itemTaken)
-                RemoveESP(itemTaken)
+                RemoveModelESP(itemTaken)
             end)
 
-            StartItemESP()
+            StartESP()
         else
-            RemoveItemHighlight()
+            RemoveGlobalESP()
         end
 	end    
 })
 
-itemTab:AddToggle({
+local selectionSection = espTab:AddSection({
+	Name = "Selection"
+})
+
+selectionSection:AddToggle({
+	Name = "View Killer",
+	Default = false,
+	Callback = function(Value)
+        ESP_ViewKiller = Value
+	end    
+})
+
+selectionSection:AddToggle({
+	Name = "View Survivor",
+	Default = false,
+	Callback = function(Value)
+        ESP_ViewSurvivor = Value
+	end    
+})
+
+selectionSection:AddToggle({
+	Name = "View Item",
+	Default = false,
+	Callback = function(Value)
+        ESP_ViewItem = Value
+	end    
+})
+
+selectionSection:AddToggle({
+	Name = "View Objective",
+	Default = false,
+	Callback = function(Value)
+        ESP_ViewObjective = Value
+	end    
+})
+
+selectionSection:AddToggle({
+	Name = "View Ability",
+	Default = false,
+	Callback = function(Value)
+        ESP_ViewAbility = Value
+	end    
+})
+
+local addonSection = espTab:AddSection({
+	Name = "Add-On"
+})
+
+addonSection:AddToggle({
+	Name = "Show Highlight",
+	Default = false,
+	Callback = function(Value)
+        ESP_ShowHighlight = Value
+	end    
+})
+
+addonSection:AddToggle({
 	Name = "Show Name",
 	Default = false,
 	Callback = function(Value)
-        Item_ShowName = Value
+        ESP_ShowName = Value
 	end    
 })
 
-itemTab:AddToggle({
-	Name = "Pickup Distance",
+addonSection:AddToggle({
+	Name = "Show Icon",
 	Default = false,
 	Callback = function(Value)
-        Item_InteractRange = Value
-
-        if Item_InteractRange == true then
-            ItemInteractDistance()
-        end
+        ESP_ShowIcon = Value
 	end    
 })
 
-itemTab:AddDropdown({
+addonSection:AddToggle({
+	Name = "Show Health",
+	Default = false,
+	Callback = function(Value)
+        ESP_ShowHealth = Value
+	end    
+})
+
+addonSection:AddToggle({
+	Name = "Show Distance",
+	Default = false,
+	Callback = function(Value)
+        ESP_ShowDistance = Value
+        RefreshESP()
+	end    
+})
+
+local settingsSection = espTab:AddSection({
+	Name = "Settings"
+})
+
+settingsSection:AddSlider({
+	Name = "Transparency",
+	Min = 0,
+	Max = 100,
+	Default = 80,
+	Color = Color3.fromRGB(255,255,255),
+	Increment = 5,
+	ValueName = "%",
+    Save = true,
+    Flag = "Transparency_ESP",
+	Callback = function(Value)
+        ESP_Transparency = Value/100
+	end    
+})
+
+settingsSection:AddSlider({
+	Name = "Refresh Rate",
+	Min = 25,
+	Max = 1000,
+	Default = 250,
+	Color = Color3.fromRGB(255,255,255),
+	Increment = 25,
+	ValueName = "milliseconds",
+    Save = true,
+    Flag = "RefreshRate_ESP",
+	Callback = function(Value)
+        ESP_Transparency = Value/1000
+	end    
+})
+
+--[----]--
+
+local autoCounterSection = abilityTab:AddSection({
+	Name = "Automatic Counter"
+})
+
+autoCounterSection:AddToggle({
+	Name = "Auto Jump (MX)",
+	Default = false,
+	Callback = function(Value)
+        WorkInProgressNotification(Value)
+	end    
+})
+
+autoCounterSection:AddToggle({
+	Name = "Auto Solve (Baldi)",
+	Default = false,
+	Callback = function(Value)
+        WorkInProgressNotification(Value)
+	end    
+})
+
+local activeCounterSection = abilityTab:AddSection({
+	Name = "Active Counter"
+})
+
+activeCounterSection:AddToggle({
+	Name = "Instant Escape (EXE)",
+	Default = false,
+	Callback = function(Value)
+        WorkInProgressNotification(Value)
+	end    
+})
+
+--[----]--
+
+local itemUsageSection = itemTab:AddSection({
+	Name = "Usage"
+})
+
+itemUsageSection:AddDropdown({
 	Name = "Item List",
 	Default = "None",
 	Options = {"None", "Weird Mask"},
@@ -875,141 +1032,126 @@ itemTab:AddDropdown({
 	end    
 })
 
-itemTab:AddButton({
+itemUsageSection:AddButton({
 	Name = "Use Selected Item",
 	Callback = function()
         if Item_ItemSelected == "None" then
             OrionLib:MakeNotification({
-                Name = "Item Not Selected",
+                Name = "No Item Selected",
                 Content = "Please select a valid item to use.",
-                Image = "rbxassetid://4483345998",
+                Image = "rbxassetid://86342899097629",
                 Time = 3
             })
         elseif Item_ItemSelected == "Weird Mask" then
-            BecomeMinion()
-            task.wait(1.5)
-            SetCameraFOV(90)
+            BecomeZombie()
         end
   	end    
 })
 
-objectiveTab:AddToggle({
-	Name = "ESP Enabled",
+--[----]--
+
+local interactToggleSection = interactionTab:AddSection({
+	Name = "Toggle"
+})
+
+interactToggleSection:AddToggle({
+	Name = "Increased Range Enabled",
 	Default = false,
 	Callback = function(Value)
-        Objective_ESP = Value
+        Interaction_Enabled = Value
 
-        if Objective_ESP == true then
-            StartObjectiveESP()
-        else
-            for _, objectiveModel in pairs(GetCurrentObjectives()) do
-                RemoveESP(objectiveModel)
-            end
+        if Interaction_Enabled == true then
+            MaximizeInteractDistance()
         end
 	end    
 })
 
-objectiveTab:AddToggle({
-	Name = "Show Name",
+local interactOptionsSection = interactionTab:AddSection({
+	Name = "Options"
+})
+
+interactOptionsSection:AddToggle({
+	Name = "Objective Range",
 	Default = false,
 	Callback = function(Value)
-        Objective_ShowName = Value
+        Interaction_ObjectiveRange = Value
 	end    
 })
 
-objectiveTab:AddToggle({
-	Name = "Show Icon",
+interactOptionsSection:AddToggle({
+	Name = "Item Range",
 	Default = false,
 	Callback = function(Value)
-        Objective_ShowIcon = Value
+        Interaction_ItemRange = Value
 	end    
 })
 
-objectiveTab:AddToggle({
-	Name = "Interact Distance",
+interactOptionsSection:AddToggle({
+	Name = "Door Range",
 	Default = false,
 	Callback = function(Value)
-        Objective_InteractRange = Value
+        Map_DoorRange = Value
 
-        if Objective_InteractRange == true then
-            ObjectiveInteractDistance()
-        end
+        WorkInProgressNotification(Value)
 	end    
 })
 
-abilityTab:AddToggle({
-	Name = "ESP Enabled",
-	Default = false,
-	Callback = function(Value)
-        Ability_ESP = Value
+--[----]--
 
-        if Ability_ESP == true then
-            StartAbilityESP()
-        else
-            for _, abilityModel in pairs(GetCurrentAbilities()) do
-                RemoveESP(abilityModel)
-            end
-        end
-	end    
+local screenSection = graphicTab:AddSection({
+	Name = "Screen"
 })
 
-abilityTab:AddToggle({
-	Name = "Show Name",
-	Default = false,
-	Callback = function(Value)
-        Ability_ShowName = Value
-	end    
-})
-
-abilityTab:AddToggle({
-	Name = "Interact Range",
-	Default = false,
-	Callback = function(Value)
-        NotifyUser_NotWorking(Value)
-	end    
-})
-
-abilityTab:AddToggle({
-	Name = "Auto Jump (MX)",
-	Default = false,
-	Callback = function(Value)
-        NotifyUser_NotWorking(Value)
-	end    
-})
-
-abilityTab:AddToggle({
-	Name = "Auto Solve (Baldi)",
-	Default = false,
-	Callback = function(Value)
-        NotifyUser_NotWorking(Value)
-	end    
-})
-
-visualTab:AddToggle({
+screenSection:AddToggle({
 	Name = "Anti Debris",
 	Default = false,
 	Callback = function(Value)
-        Visual_AntiDebris = Value
+        Graphic_AntiDebris = Value
 
-        if Visual_AntiDebris == true then
-            UpdateAntiDebris()
+        if Graphic_AntiDebris == true then
+            ActivateAntiDebris()
         end
 	end    
 })
 
-visualTab:AddToggle({
+local worldSection = graphicTab:AddSection({
+	Name = "World"
+})
+
+worldSection:AddToggle({
 	Name = "Fullbright",
 	Default = false,
 	Callback = function(Value)
-        Visual_Fullbright = Value
+        Graphic_Fullbright = Value
 
-        if Visual_Fullbright == true then
+        if Graphic_Fullbright == true then
             ActivateFullbright()
         end
 	end    
 })
 
-farmTab:AddToggle({
+worldSection:AddSlider({
+	Name = "Brightness",
+	Min = 0,
+	Max = 500,
+	Default = 100,
+	Color = Color3.fromRGB(255,255,255),
+	Increment = 25,
+	ValueName = "%",
+    Save = true,
+    Flag = "Brightness_Graphic",
+	Callback = function(Value)
+        Graphic_Brightness = Value/100
+	end    
+})
+
+--[----]--
+
+local rewardSection = farmTab:AddSection({
+	Name = "Rewards"
+})
+
+rewardSection:AddToggle({
 	Name = "Max Coins",
 	Default = false,
 	Callback = function(Value)
@@ -1021,8 +1163,12 @@ farmTab:AddToggle({
 	end    
 })
 
-farmTab:AddToggle({
-	Name = "Auto Move (Anti-AFK)",
+local antiAFKSection = farmTab:AddSection({
+	Name = "Anti-AFK"
+})
+
+antiAFKSection:AddToggle({
+	Name = "Auto Walk",
 	Default = false,
 	Callback = function(Value)
         Farm_AutoMove = Value
@@ -1035,15 +1181,95 @@ farmTab:AddToggle({
 	end    
 })
 
-mapTab:AddToggle({
-	Name = "Door Range",
+antiAFKSection:AddToggle({
+	Name = "Auto Jump",
 	Default = false,
 	Callback = function(Value)
+        Farm_AutoJump = Value
 
+        if Farm_AutoJump == true then
+            AutoJump()
+        end
 	end    
 })
 
-lobbyTab:AddToggle({
+--[----]--
+
+local colorPlayerSection = colorTab:AddSection({
+	Name = "Players"
+})
+
+colorPlayerSection:AddColorpicker({
+	Name = "Killer",
+	Default = Color3.fromRGB(255, 255, 255),
+    Save = true,
+    Flag = "ColorESP_Killer",
+	Callback = function(Value)
+		Color_Killer = Value
+	end	  
+})
+
+colorPlayerSection:AddColorpicker({
+	Name = "Zombie",
+	Default = Color3.fromRGB(255, 255, 255),
+    Save = true,
+    Flag = "ColorESP_Zombie",
+	Callback = function(Value)
+		Color_Zombie = Value
+	end	  
+})
+
+colorPlayerSection:AddColorpicker({
+	Name = "Survivor",
+	Default = Color3.fromRGB(255, 255, 255),
+    Save = true,
+    Flag = "ColorESP_Survivor",
+	Callback = function(Value)
+		Color_Survivor = Value
+	end	  
+})
+
+local colorObjectSection = colorTab:AddSection({
+	Name = "Objects"
+})
+
+colorObjectSection:AddColorpicker({
+	Name = "Item",
+	Default = Color3.fromRGB(255, 255, 255),
+    Save = true,
+    Flag = "ColorESP_Item",
+	Callback = function(Value)
+		Color_Item = Value
+	end	  
+})
+
+colorObjectSection:AddColorpicker({
+	Name = "Objective",
+	Default = Color3.fromRGB(255, 255, 255),
+    Save = true,
+    Flag = "ColorESP_Objective",
+	Callback = function(Value)
+		Color_Objective = Value
+	end	  
+})
+
+colorObjectSection:AddColorpicker({
+	Name = "Ability",
+	Default = Color3.fromRGB(255, 255, 255),
+    Save = true,
+    Flag = "ColorESP_Ability",
+	Callback = function(Value)
+        Color_Ability = Value
+	end	  
+})
+
+--[----]--
+
+local lobbyWorldSection = lobbyTab:AddSection({
+	Name = "World"
+})
+
+lobbyWorldSection:AddToggle({
 	Name = "Mute Radio",
 	Default = false,
 	Callback = function(Value)
@@ -1053,14 +1279,45 @@ lobbyTab:AddToggle({
 	end    
 })
 
-lobbyTab:AddButton({
+local lobbyArcadeSection = lobbyTab:AddSection({
+	Name = "Arcade Machine"
+})
+
+lobbyArcadeSection:AddToggle({
+	Name = "Auto Play",
+	Default = false,
+	Callback = function(Value)
+        WorkInProgressNotification(Value)
+	end    
+})
+
+local lobbyOptionSection = lobbyTab:AddSection({
+	Name = "Options"
+})
+
+lobbyOptionSection:AddButton({
 	Name = "Reset (Death)",
 	Callback = function()
         KillHumanoid()
   	end    
 })
 
-mainTab:AddLabel("This GUI covers nearly everything possible on the client-side.")
+
+--[----]--
+
+local infoSection = helpTab:AddSection({
+	Name = "Information"
+})
+
+infoSection:AddParagraph(`Some objectives cannot be highlighted. Prefer "Show Icon".`,"ROBLOX has a graphical limit of 31 for performance.")
+infoSection:AddLabel(`Most items can only be used when you're a survivor.`)
+infoSection:AddLabel(`Increase "Refresh Rate" if you experience lag while using ESP.`)
+
+local contactSection = helpTab:AddSection({
+	Name = "Contact"
+})
+
+contactSection:AddParagraph("If something stops working, check F9 console for errors.","Take a screenshot of any errors and send them to me.")
 
 -- Runtime
 
