@@ -56,6 +56,7 @@ local Color_Objective = nil
 local Color_Ability = nil
 
 local Lobby_MuteRadio = false
+local Lobby_AutoPlayFNF = false
 
 local RoleToIcon = {
     ["Survivor"] = {
@@ -142,44 +143,38 @@ function StartESP()
     end
 end
 
+function FindExistingESP()
+
+end
+
 function RefreshESP()
     if refreshingESP == true then return end
     refreshingESP = true
 
     RemoveGlobalESP()
 
-    if ESP_ViewKiller == true then
-        for _, player in Players:GetPlayers() do
-            if player == localPlayer then continue end
+    for _, player in Players:GetPlayers() do
+        if player == localPlayer then continue end
 
-            local character = player.Character
-            if not character then return end
-            
-            local playerIsKiller = character:FindFirstChild("MonsterNameValue")
+        local character = player.Character
+        if not character then return end
 
-            if playerIsKiller then
-                RemoveModelESP(character)
+        local espExists = FindExistingESP(character)
+        if espExists then return end
+        
+        local playerIsKiller = character:FindFirstChild("MonsterNameValue")
+        local playerIsSurvivor = character:FindFirstChild("Alive")
 
+        if playerIsKiller then
+            if ESP_ViewKiller then
                 if playerIsKiller.Value == "Zombie" then
                     AddPlayerESP(character, Color_Zombie, "Zombie")
                 else
                     AddPlayerESP(character, Color_Killer, "Killer")
                 end
             end
-        end
-    end
-
-    if ESP_ViewSurvivor == true then
-        for _, player in Players:GetPlayers() do
-            if player == localPlayer then continue end
-
-            local character = player.Character
-            if not character then return end
-            
-            local playerIsSurvivor = character:FindFirstChild("Alive")
-
-            if playerIsSurvivor then
-                RemoveModelESP(character)
+        elseif playerIsSurvivor then
+            if ESP_ViewSurvivor then
                 AddPlayerESP(character, Color_Survivor, "Survivor")
             end
         end
@@ -187,7 +182,6 @@ function RefreshESP()
 
     if ESP_ViewItem == true then
         for _, itemModel in workspace.Server.PickUps:GetChildren() do
-            RemoveModelESP(itemModel)
             AddItemESP(itemModel)
         end
     end
@@ -196,8 +190,6 @@ function RefreshESP()
         local currentObjectives = GetCurrentObjectives()
 
         for _, objectiveInstance in pairs(currentObjectives) do
-            RemoveModelESP(objectiveInstance)
-
             if not objectiveInstance:FindFirstChild("ObjectivePrompt", true) then continue end
 
             if objectiveInstance:IsA("Model") then
@@ -213,7 +205,6 @@ function RefreshESP()
         local currentAbilities = GetCurrentAbilities()
 
         for _, abilityModel in pairs(currentAbilities) do
-            RemoveModelESP(abilityModel)
             AddAbilityESP(abilityModel)
         end
     end
@@ -232,52 +223,60 @@ function CreateESPHighlight(parentInstance, espColor)
 end
 
 function AddPlayerESP(character, espColor, roleType)
-    CreateESPHighlight(character, espColor)
+    if ESP_ShowHighlight then
+        CreateESPHighlight(character, espColor)
+    end
 
-        if ESP_ShowHealth == true then
-            if roleType == "Survivor" then
-                AddHealthLabel(character)
-            end
+    if ESP_ShowHealth == true then
+        if roleType == "Survivor" then
+            AddHealthLabel(character)
         end
+    end
 
-        if ESP_ShowIcon then
-            AddImageLabel(character.PrimaryPart, RoleToIcon[roleType].Color, RoleToIcon[roleType].Image)
-        end
+    if ESP_ShowIcon then
+        AddImageLabel(character.PrimaryPart, RoleToIcon[roleType].Color, RoleToIcon[roleType].Image)
+    end
 
-        if ESP_ShowDistance == true then
-            AddDistanceLabel(character)
-        end
+    if ESP_ShowDistance == true then
+        AddDistanceLabel(character)
+    end
 end
 
 function AddItemESP(itemModel)
-    CreateESPHighlight(itemModel, Color_Item)
+    if ESP_ShowHighlight then
+        CreateESPHighlight(itemModel, Color_Item)
+    end
 
-        if ESP_ShowName == true then
-            local isModel = itemModel:IsA("Model")
-            local mainPart = itemModel
+    if ESP_ShowName == true then
+        local isModel = itemModel:IsA("Model")
+        local mainPart = itemModel
 
-            if isModel then
-                mainPart = itemModel.PrimaryPart
-            end
-
-            AddPartLabel(mainPart, itemModel.Name)
+        if isModel then
+            mainPart = itemModel.PrimaryPart
         end
+
+        AddPartLabel(mainPart, itemModel.Name)
+    end
 end
 
 function AddObjectiveESP(objectivePart, objectiveName)
+    if ESP_ShowHighlight then
         CreateESPHighlight(objectivePart, Color_Objective)
+    end
 
-        if ESP_ShowName == true then
-            AddPartLabel(objectivePart, objectiveName)
-        end
+    if ESP_ShowName == true then
+        AddPartLabel(objectivePart, objectiveName)
+    end
 
-        if ESP_ShowIcon == true then
-            AddImageLabel(mainPart, Color3.fromRGB(255, 255, 255), 12011030159)
-        end
+    if ESP_ShowIcon == true then
+        AddImageLabel(mainPart, Color3.fromRGB(255, 255, 255), 12011030159)
+    end
 end
 
 function AddAbilityESP(model)
-    CreateESPHighlight(model, Color_Ability)
+    if ESP_ShowHighlight then
+        CreateESPHighlight(model, Color_Ability)
+    end
 
     if ESP_ShowName == true then
         AddPartLabel(model, model.Name)
@@ -770,6 +769,28 @@ function WorkInProgressNotification(toggle)
     end
 end
 
+function AutoPlayFNF()
+    local LemonFunkyUI = PlayerGui.LemonFunky
+    if LemonFunkyUI.P2Stats.Visible == true then return end
+
+    local NoteHolderUI = LemonFunkyUI.NotesRight.Notes
+    local HitBoxes = NoteHolderUI.HitBoxes
+
+    for _, noteFrame in NoteHolderUI:GetChildren() do
+        if not noteFrame:IsA("Frame") then continue end
+
+        for _, buttonImage in noteFrame:GetChildren() do
+            if buttonImage.Name ~= "Note" then continue end
+            if buttonImage.AbsolutePosition.Y == noteFrame[noteFrame.Name].AbsolutePosition.Y then continue end
+            if math.round(buttonImage.AbsolutePosition.Y) == 681 then continue end
+
+            if math.round(buttonImage.AbsolutePosition.Y/10) == math.round(HitBoxes.Sick.AbsolutePosition.Y/10) then
+                print("Press [SPACE]")
+            end
+        end
+    end
+end
+
 -- Tabs
 
 local mainTab = Window:MakeTab({
@@ -979,7 +1000,7 @@ settingsSection:AddSlider({
     Save = true,
     Flag = "RefreshRate_ESP",
 	Callback = function(Value)
-        ESP_Transparency = Value/1000
+        ESP_RefreshRate = Value/1000
 	end    
 })
 
@@ -1142,6 +1163,7 @@ worldSection:AddSlider({
     Flag = "Brightness_Graphic",
 	Callback = function(Value)
         Graphic_Brightness = Value/100
+        ActivateFullbright()
 	end    
 })
 
@@ -1288,6 +1310,16 @@ lobbyArcadeSection:AddToggle({
 	Default = false,
 	Callback = function(Value)
         WorkInProgressNotification(Value)
+
+        --[[
+        Lobby_AutoPlayFNF = Value
+
+        if Lobby_AutoPlayFNF == true then
+            RunService:BindToRenderStep("AutoPlayFNF", Enum.RenderPriority.Last.Value, AutoPlayFNF)
+        else
+            RunService:UnbindFromRenderStep("AutoPlayFNF")
+        end
+        ]]--
 	end    
 })
 
@@ -1309,9 +1341,10 @@ local infoSection = helpTab:AddSection({
 	Name = "Information"
 })
 
-infoSection:AddParagraph(`Some objectives cannot be highlighted. Prefer "Show Icon".`,"ROBLOX has a graphical limit of 31 for performance.")
+infoSection:AddParagraph(`Some objectives cannot be highlighted. Prefer 'Show Icon'.`,"ROBLOX has a graphical limit of 31 for performance.")
 infoSection:AddLabel(`Most items can only be used when you're a survivor.`)
-infoSection:AddLabel(`Increase "Refresh Rate" if you experience lag while using ESP.`)
+infoSection:AddLabel(`Increase 'Refresh Rate' if you experience lag while using ESP.`)
+infoSection:AddLabel(`Using 'Reset' may break your game.`)
 
 local contactSection = helpTab:AddSection({
 	Name = "Contact"
