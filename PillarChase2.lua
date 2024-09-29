@@ -39,10 +39,8 @@ local Graphic_AntiDebris = false
 local Graphic_Fullbright = false
 local Graphic_Brightness = nil
 
-local Interaction_Enabled = false
-local Interaction_ObjectiveRange = false
-local Interaction_ItemRange = false
-local Interaction_DoorRange = false
+local Interaction_IncreasedRange = false
+local Interaction_InstantComplete = false
 
 local Farm_MaxCoins = false
 local Farm_AutoMove = false
@@ -74,6 +72,8 @@ local RoleToIcon = {
 }
 
 local refreshingESP = false
+
+local connectionTab = {}
 
 -- Functions
 
@@ -122,11 +122,11 @@ end
 function RemoveGlobalESP()
     RemoveItemESP()
 
-    for _, objectiveModel in pairs(GetCurrentObjectives()) do
+    for _, objectiveModel in GetCurrentObjectives() do
         RemoveModelESP(objectiveModel)
     end
 
-    for _, abilityModel in pairs(GetCurrentAbilities()) do
+    for _, abilityModel in GetCurrentAbilities() do
         RemoveModelESP(abilityModel)
     end
     
@@ -135,16 +135,16 @@ function RemoveGlobalESP()
     end
 end
 
+function FindExistingESP(character)
+    return false -- Work In Progress
+end
+
 function StartESP()
     while ESP_Enabled == true do
         RefreshESP()
 
         task.wait(ESP_RefreshRate)
     end
-end
-
-function FindExistingESP()
-
 end
 
 function RefreshESP()
@@ -511,7 +511,7 @@ function GetCurrentDoors()
         end
     end
     
-    return objectiveTable
+    return doorTable
 end
 
 function GetMaxCoins()
@@ -654,6 +654,22 @@ function AutoJump()
     end
 end
 
+function AutoSolveBaldi()
+    while Ability_AutoSolveBaldi == true do
+        local gameGui = PlayerGui:FindFirstChild("GameGui")
+        if not gameGui then return end
+        
+        local thinkpadUI = gameGui.thinkpadUI
+        if not thinkpadUI then return end
+
+        local mathQuestion = thinkpadUI.Questions.Question.Value
+
+        -- CONTINUE CODING
+
+        task.wait(0.1)
+    end
+end
+
 function ToggleLobbyRadio()
     if Lobby_MuteRadio == true then
         for _, sound in workspace.Lobby["Old Radio"]:GetChildren() do
@@ -713,45 +729,107 @@ function BecomeZombie()
 end
 
 function MaximizeInteractDistance()
-    while Interaction_Enabled == true do
-        if Interaction_ObjectiveRange == true then
-            local currentObjectives = GetCurrentObjectives()
+    while Interaction_IncreasedRange == true do
+        local currentObjectives = GetCurrentObjectives()
 
-            for _, objectiveModel in pairs(currentObjectives) do
-                local interactPrompt = objectiveModel:FindFirstChild("ObjectivePrompt", true)
-    
-                if interactPrompt then
-                    interactPrompt.MaxActivationDistance = 11
-                end
+        for _, objectiveModel in pairs(currentObjectives) do
+            local proximityPrompt = objectiveModel:FindFirstChildOfClass("ProximityPrompt", true)
+
+            if proximityPrompt then
+                proximityPrompt.MaxActivationDistance = 11
             end
         end
 
-        if interaction_ItemRange == true then
-            local currentItems = GetCurrentItems()
+        local currentItems = GetCurrentItems()
 
-            for _, itemModel in pairs(currentItems) do
-                local interactPrompt = itemModel:FindFirstChild("ProximityPrompt", true)
-    
-                if interactPrompt then
-                    interactPrompt.MaxActivationDistance = 8
-                end
+        for _, itemModel in pairs(currentItems) do
+            local proximityPrompt = itemModel:FindFirstChildOfClass("ProximityPrompt", true)
+
+            if proximityPrompt then
+                proximityPrompt.MaxActivationDistance = 8
             end
         end
 
-        if Interaction_DoorRange == true then
-            local currentDoors = GetCurrentItems()
+        local currentDoors = GetCurrentDoors()
 
-            for _, doorModel in pairs(currentDoors) do
-                local interactPrompt = itemModel:FindFirstChild("NAMEOFTHEPROMPTGOESHERE", true)
-    
-                if interactPrompt then
-                    interactPrompt.MaxActivationDistance = 17
-                end
+        for _, doorModel in pairs(currentDoors) do
+            local proximityPrompt = doorModel:FindFirstChildOfClass("ProximityPrompt", true)
+
+            if proximityPrompt then
+                proximityPrompt.MaxActivationDistance = 17
             end
         end
     
         task.wait(0.5)
     end
+end
+
+function InstantCompleteInteraction()
+    while Interaction_InstantComplete == true do
+        local currentObjectives = GetCurrentObjectives()
+
+        for _, objectiveModel in pairs(currentObjectives) do
+            local proximityPrompt = objectiveModel:FindFirstChildOfClass("ProximityPrompt", true)
+
+            if proximityPrompt then
+                ConnectCallback(proximityPrompt, "PromptButtonHoldBegan", "InstantActivation_Objective", function()
+                    fireproximityprompt(proximityPrompt)
+                end)
+            end
+        end
+
+        local currentItems = GetCurrentItems()
+
+        for _, itemModel in pairs(currentItems) do
+            local proximityPrompt = itemModel:FindFirstChildOfClass("ProximityPrompt", true)
+
+            if proximityPrompt then
+                ConnectCallback(proximityPrompt, "PromptButtonHoldBegan", "InstantActivation_Item", function()
+                    fireproximityprompt(proximityPrompt)
+                end)
+            end
+        end
+
+        local currentDoors = GetCurrentDoors()
+
+        for _, doorModel in pairs(currentDoors) do
+            local proximityPrompt = doorModel:FindFirstChildOfClass("ProximityPrompt", true)
+
+            if proximityPrompt then
+                ConnectCallback(proximityPrompt, "PromptButtonHoldBegan", "InstantActivation_Door", function()
+                    fireproximityprompt(proximityPrompt)
+                end)
+            end
+        end
+    
+        task.wait(0.5)
+    end
+end
+
+function ConnectCallback(Target : Instance, Type : string, Name : string, Callback)
+	if Target then
+		if not connectionTab[Target] then
+			connectionTab[Target] = {}
+		end
+		
+        if connectionTab[Target]["Connection_"..Name] then return end
+        print("Connection creating")
+		local index = #connectionTab[Target] + 1
+			
+		connectionTab[Target]["Connection_"..Name] = Target[Type]:Connect(Callback)
+			
+		return connectionTab[Target], index
+	end
+end
+
+function DisconnectCallback(Connection : RBXScriptConnection, Target, Number)
+	if Connection then
+		Connection:Disconnect()
+	
+		task.wait(0.1)
+	
+		connectionTab[Target]["Connection"..Number] = nil
+	end
 end
 
 function SetCameraFOV(fovNumber)
@@ -1071,49 +1149,31 @@ itemUsageSection:AddButton({
 
 --[----]--
 
-local interactToggleSection = interactionTab:AddSection({
-	Name = "Toggle"
-})
-
-interactToggleSection:AddToggle({
-	Name = "Increased Range Enabled",
-	Default = false,
-	Callback = function(Value)
-        Interaction_Enabled = Value
-
-        if Interaction_Enabled == true then
-            MaximizeInteractDistance()
-        end
-	end    
-})
-
 local interactOptionsSection = interactionTab:AddSection({
 	Name = "Options"
 })
 
 interactOptionsSection:AddToggle({
-	Name = "Objective Range",
+	Name = "Maximize Interact Distance",
 	Default = false,
 	Callback = function(Value)
-        Interaction_ObjectiveRange = Value
+        Interaction_IncreasedRange = Value
+
+        if Interaction_IncreasedRange == true then
+            MaximizeInteractDistance()
+        end
 	end    
 })
 
 interactOptionsSection:AddToggle({
-	Name = "Item Range",
+	Name = "Instant Complete Interaction",
 	Default = false,
 	Callback = function(Value)
-        Interaction_ItemRange = Value
-	end    
-})
+        Interaction_InstantComplete = Value
 
-interactOptionsSection:AddToggle({
-	Name = "Door Range",
-	Default = false,
-	Callback = function(Value)
-        Map_DoorRange = Value
-
-        WorkInProgressNotification(Value)
+        if Interaction_InstantComplete == true then
+            InstantCompleteInteraction()
+        end
 	end    
 })
 
@@ -1180,7 +1240,7 @@ rewardSection:AddToggle({
         Farm_MaxCoins = Value
 
         if Farm_MaxCoins == true then
-            GiveMaxCoins()
+            GetMaxCoins()
         end
 	end    
 })
