@@ -193,7 +193,7 @@ function RefreshESP()
             if not objectiveInstance:FindFirstChild("ObjectivePrompt", true) then continue end
 
             if objectiveInstance:IsA("Model") then
-                local mainPart = objectiveInstance.PrimaryPart or objectiveInstance:FindFirstChildOfClass("BasePart")
+                local mainPart = objectiveInstance.PrimaryPart or objectiveInstance:FindFirstChildOfClass("BasePart", true)
                 AddObjectiveESP(mainPart, objectiveInstance.Name)
             else
                 AddObjectiveESP(objectiveInstance, objectiveInstance.Name)
@@ -804,32 +804,6 @@ function InstantCompleteInteraction()
     
         task.wait(0.5)
     end
-end
-
-function ConnectCallback(Target : Instance, Type : string, Name : string, Callback)
-	if Target then
-		if not connectionTab[Target] then
-			connectionTab[Target] = {}
-		end
-		
-        if connectionTab[Target]["Connection_"..Name] then return end
-        print("Connection creating")
-		local index = #connectionTab[Target] + 1
-			
-		connectionTab[Target]["Connection_"..Name] = Target[Type]:Connect(Callback)
-			
-		return connectionTab[Target], index
-	end
-end
-
-function DisconnectCallback(Connection : RBXScriptConnection, Target, Number)
-	if Connection then
-		Connection:Disconnect()
-	
-		task.wait(0.1)
-	
-		connectionTab[Target]["Connection"..Number] = nil
-	end
 end
 
 function SetCameraFOV(fovNumber)
