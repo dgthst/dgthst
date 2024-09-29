@@ -174,7 +174,9 @@ function RefreshESP()
     end
 
     if ESP_ViewItem == true then
-        for _, itemModel in workspace.Server.PickUps:GetChildren() do
+        local currentItems = GetCurrentItems()
+
+        for _, itemModel in pairs(currentItems) do
             AddItemESP(itemModel)
         end
     end
@@ -262,7 +264,7 @@ function AddObjectiveESP(objectivePart, objectiveName)
     end
 
     if ESP_ShowIcon == true then
-        AddImageLabel(mainPart, Color3.fromRGB(255, 255, 255), 12011030159)
+        AddImageLabel(objectivePart, Color3.fromRGB(255, 255, 255), 12011030159)
     end
 end
 
@@ -471,9 +473,15 @@ function GetCurrentObjectives()
     
             if folderName:find("objective") then
                 for _, objectiveModel in child:GetChildren() do
+                    print(`{objectiveModel.Name}: {objectiveModel.ClassName}`)
                     table.insert(objectiveTable, objectiveModel)
                 end
             end
+        end
+
+        local foundExit = foundMap:FindFirstChild("Exit")
+        if foundExit then
+            table.insert(objectiveTable, foundExit)
         end
     end
     
@@ -555,28 +563,32 @@ function ActivateAntiDebris()
         local character = localPlayer.Character
         if not character then return end
 
-        local infectedUI = character:FindFirstChild("Infected", true)
+        local infectedUI = game:FindFirstChild("Infected", true)
         if infectedUI then infectedUI:Destroy() end
 
         local foundFlash = gameGui:FindFirstChild("Flash")
-        if foundFlash then foundFlash:Destroy() end
+        if foundFlash then
+            foundFlash.Visible = false
+        end
 
         local ventErrorScript = gameGui:FindFirstChild("VentError")
-        if ventErrorScript then ventErrorScript:Destroy() end
+        if ventErrorScript then
+            ventErrorScript.Enabled = false
+        end
 
         local springScare = gameGui:FindFirstChild("SpringScare")
-        if springScare then springScare:Destroy() end
+        if springScare then
+            springScare.Visible = false
+        end
 
         local bloodUI = gameGui:FindFirstChild("BloodUI")
-        if bloodUI then bloodUI:Destroy() end
+        if bloodUI then
+            bloodUI.Visible = false
+        end
 
         local debuffsFrame = gameGui:FindFirstChild("Debuffs")
         if debuffsFrame then
-            for _, child in debuffsFrame:GetChildren() do
-                if child:IsA("ImageLabel") or child:IsA("Frame") then
-                    child.Visible = false
-                end
-            end
+            debuffsFrame.Visible = false
         end
 
         local monsterUIFrame = gameGui:FindFirstChild("MonsterUI")
@@ -726,7 +738,7 @@ function MaximizeInteractDistance()
         local currentObjectives = GetCurrentObjectives()
 
         for _, objectiveModel in pairs(currentObjectives) do
-            local proximityPrompt = objectiveModel:FindFirstChildOfClass("ProximityPrompt", true)
+            local proximityPrompt = objectiveModel:FindFirstChildWhichIsA("ProximityPrompt", true)
 
             if proximityPrompt then
                 proximityPrompt.MaxActivationDistance = 11
@@ -736,7 +748,7 @@ function MaximizeInteractDistance()
         local currentItems = GetCurrentItems()
 
         for _, itemModel in pairs(currentItems) do
-            local proximityPrompt = itemModel:FindFirstChildOfClass("ProximityPrompt", true)
+            local proximityPrompt = itemModel:FindFirstChildWhichIsA("ProximityPrompt", true)
 
             if proximityPrompt then
                 proximityPrompt.MaxActivationDistance = 8
@@ -746,7 +758,7 @@ function MaximizeInteractDistance()
         local currentDoors = GetCurrentDoors()
 
         for _, doorModel in pairs(currentDoors) do
-            local proximityPrompt = doorModel:FindFirstChildOfClass("ProximityPrompt", true)
+            local proximityPrompt = doorModel:FindFirstChildWhichIsA("ProximityPrompt", true)
 
             if proximityPrompt then
                 proximityPrompt.MaxActivationDistance = 17
@@ -762,67 +774,35 @@ function InstantCompleteInteraction()
         local currentObjectives = GetCurrentObjectives()
 
         for _, objectiveModel in pairs(currentObjectives) do
-            local proximityPrompt = objectiveModel:FindFirstChildOfClass("ProximityPrompt", true)
+            local proximityPrompt = objectiveModel:FindFirstChildWhichIsA("ProximityPrompt", true)
 
             if proximityPrompt then
-                ConnectCallback(proximityPrompt, "PromptButtonHoldBegan", "InstantActivation_Objective", function()
-                    fireproximityprompt(proximityPrompt)
-                end)
+                proximityPrompt.HoldDuration = 0.25
             end
         end
 
         local currentItems = GetCurrentItems()
 
         for _, itemModel in pairs(currentItems) do
-            local proximityPrompt = itemModel:FindFirstChildOfClass("ProximityPrompt", true)
+            local proximityPrompt = itemModel:FindFirstChildWhichIsA("ProximityPrompt", true)
 
             if proximityPrompt then
-                ConnectCallback(proximityPrompt, "PromptButtonHoldBegan", "InstantActivation_Item", function()
-                    fireproximityprompt(proximityPrompt)
-                end)
+                proximityPrompt.HoldDuration = 0.25
             end
         end
 
         local currentDoors = GetCurrentDoors()
 
         for _, doorModel in pairs(currentDoors) do
-            local proximityPrompt = doorModel:FindFirstChildOfClass("ProximityPrompt", true)
+            local proximityPrompt = doorModel:FindFirstChildWhichIsA("ProximityPrompt", true)
 
             if proximityPrompt then
-                ConnectCallback(proximityPrompt, "PromptButtonHoldBegan", "InstantActivation_Door", function()
-                    fireproximityprompt(proximityPrompt)
-                end)
+                proximityPrompt.HoldDuration = 0.25
             end
         end
 
         task.wait(0.5)
     end
-end
-
-function ConnectCallback(Target : Instance, Type : string, Name : string, CallFunc)
-	if Target then
-		if not connectionTab[Target] then
-			connectionTab[Target] = {}
-		end
-		
-        if connectionTab[Target]["Connection_"..Name] then return end
-
-		local index = #connectionTab[Target] + 1
-			
-		connectionTab[Target]["Connection_"..Name] = Target[Type]:Connect(CallFunc)
-			
-		return connectionTab[Target], index
-	end
-end
-
-function DisconnectCallback(Connection : RBXScriptConnection, Target, Number)
-	if Connection then
-		Connection:Disconnect()
-	
-		task.wait(0.1)
-	
-		connectionTab[Target]["Connection"..Number] = nil
-	end
 end
 
 function SetCameraFOV(fovNumber)
@@ -1162,11 +1142,7 @@ interactOptionsSection:AddToggle({
 	Name = "Instant Complete Interaction",
 	Default = false,
 	Callback = function(Value)
-        Interaction_InstantComplete = Value
-
-        if Interaction_InstantComplete == true then
-            InstantCompleteInteraction()
-        end
+        WorkInProgressNotification(Value)
 	end    
 })
 
