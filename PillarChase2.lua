@@ -135,10 +135,6 @@ function RemoveGlobalESP()
     end
 end
 
-function FindExistingESP(character)
-    return false -- Work In Progress
-end
-
 function StartESP()
     while ESP_Enabled == true do
         RefreshESP()
@@ -157,10 +153,7 @@ function RefreshESP()
         if player == localPlayer then continue end
 
         local character = player.Character
-        if not character then return end
-
-        local espExists = FindExistingESP(character)
-        if espExists then return end
+        if not character then continue end
         
         local playerIsKiller = character:FindFirstChild("MonsterNameValue")
         local playerIsSurvivor = character:FindFirstChild("Alive")
@@ -801,9 +794,35 @@ function InstantCompleteInteraction()
                 end)
             end
         end
-    
+
         task.wait(0.5)
     end
+end
+
+function ConnectCallback(Target : Instance, Type : string, Name : string, CallFunc)
+	if Target then
+		if not connectionTab[Target] then
+			connectionTab[Target] = {}
+		end
+		
+        if connectionTab[Target]["Connection_"..Name] then return end
+
+		local index = #connectionTab[Target] + 1
+			
+		connectionTab[Target]["Connection_"..Name] = Target[Type]:Connect(CallFunc)
+			
+		return connectionTab[Target], index
+	end
+end
+
+function DisconnectCallback(Connection : RBXScriptConnection, Target, Number)
+	if Connection then
+		Connection:Disconnect()
+	
+		task.wait(0.1)
+	
+		connectionTab[Target]["Connection"..Number] = nil
+	end
 end
 
 function SetCameraFOV(fovNumber)
