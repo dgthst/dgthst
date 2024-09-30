@@ -3,7 +3,7 @@
 local OrionLib = loadstring(game:HttpGet(('https://raw.githubusercontent.com/shlexware/Orion/main/source')))()
 local Window = OrionLib:MakeWindow({Name = "Pillar Chase Panel", HidePremium = false, Intro = false, IntroText = "SIGMA ™", SaveConfig = true, ConfigFolder = "PC2Config"})
 
-local currentVersion = "2.0.3"
+local currentVersion = "2.0.4"
 
 -- Services
 
@@ -62,9 +62,17 @@ local Color_Ability = nil
 local Lobby_MuteRadio = false
 local Lobby_AutoPlayFNF = false
 
+local Autobuy_Enabled = false
+local Autobuy_Flashlight = false
+local Autobuy_FirstAidKit = false
+local Autobuy_UltraFlashlight = false
+local Autobuy_Stephano = false
+local Autobuy_Gauntlet = false
+local Autobuy_WeirdMask = false
+
 local RoleToIcon = {
     ["Survivor"] = {
-        ["Image"] = 75665386575731;
+        ["Image"] = 130669312277208;
         ["Color"] = Color3.fromRGB(255, 255, 255);
     };
     ["Killer"] = {
@@ -97,8 +105,6 @@ local ItemToMaxStats = {
 }
 
 local refreshingESP = false
-
-local connectionTab = {}
 
 -- Functions
 
@@ -232,7 +238,7 @@ function CreateESPHighlight(parentInstance, espColor)
     local newHighlight = Instance.new("Highlight")
     newHighlight.Name = "espHighlight"
     newHighlight.FillColor = espColor
-    newHighlight.FillTransparency = 0.8
+    newHighlight.FillTransparency = ESP_Transparency
     newHighlight.OutlineTransparency = 0.2
     newHighlight.OutlineColor = Color3.fromRGB(0, 0, 0)
     newHighlight.Parent = parentInstance
@@ -250,7 +256,10 @@ function AddPlayerESP(character, espColor, roleType)
     end
 
     if ESP_ShowIcon then
-        AddImageLabel(character.PrimaryPart, RoleToIcon[roleType].Color, RoleToIcon[roleType].Image)
+        local imageLabel = AddImageLabel(character.PrimaryPart, RoleToIcon[roleType].Color, RoleToIcon[roleType].Image)
+        if localPlayer:IsFriendsWith(Players:GetPlayerFromCharacter(character).UserId) then
+            AddFriendLabel(imageLabel)
+        end
     end
 
     if ESP_ShowDistance == true then
@@ -369,6 +378,20 @@ function AddImageLabel(part, imageColor, imageID)
     newImageLabel.ImageTransparency = 0.2
     newImageLabel.ScaleType = Enum.ScaleType.Fit
     newImageLabel.Parent = newIcon
+
+    return newImageLabel
+end
+
+function AddFriendLabel(parentFrame)
+    local newImageLabel = Instance.new("ImageLabel")
+    newImageLabel.AnchorPoint = Vector2.new(1,0)
+    newImageLabel.Position = UDim2.new(1.2,0,-0.2,0)
+    newImageLabel.Size = UDim2.new(0.4,0,0.4,0)
+    newImageLabel.BackgroundTransparency = 1
+    newImageLabel.Image = `rbxassetid://128275723342163`
+    newImageLabel.ImageTransparency = 0.2
+    newImageLabel.ScaleType = Enum.ScaleType.Fit
+    newImageLabel.Parent = parentFrame
 end
 
 function AddDistanceLabel(character)
@@ -951,6 +974,69 @@ function EnableBorgerSuit()
     end
 end
 
+function AutoBuyItems()
+    while Autobuy_Enabled == true do
+        local LobbyGUI = PlayerGui.LobbyGUI
+        if not LobbyGUI then return end
+
+        local BuyItemEvent = LobbyGUI.ButtonFrames.ITEMSHOP.WorkItemGUI.BuyItem
+        if not BuyItemEvent then return end
+
+        if Autobuy_Flashlight == true then
+            BuyItemEvent:FireServer(true, "Flashlight")
+        end
+
+        if Autobuy_FirstAidKit == true then
+            BuyItemEvent:FireServer(true, "First Aid Kit")
+        end
+
+        if Autobuy_UltraFlashlight == true then
+            BuyItemEvent:FireServer(true, "Ultra Flashlight")
+        end
+
+        if Autobuy_Stephano == true then
+            BuyItemEvent:FireServer(true, "Stephano")
+        end
+
+        if Autobuy_Gauntlet == true then
+            BuyItemEvent:FireServer(true, "Doom's Gauntlet")
+        end
+
+        if Autobuy_WeirdMask == true then
+            BuyItemEvent:FireServer(true, "Weird Mask")
+        end
+    end
+end
+
+function StartGodmodeAnchor()
+    local character = localPlayer.character
+    if not character then return end
+
+    local PickupModels = ReplicatedStorage.Assets.PickupModels
+    local GodEvent = PickupModels["Weird Mask"]["Weird Mask"]["SetupScript"].God
+    
+    local playerIsSurvivor = character:FindFirstChild("Alive")
+    
+    if playerIsSurvivor then
+        GodEvent:FireServer()
+
+        localPlayer.Character.HumanoidRootPart.Anchored = false
+        localPlayer.Character.Head.Anchored = false
+        localPlayer.Character.Torso.Anchored = false
+        localPlayer.Character["Left Arm"].Anchored = false
+        localPlayer.Character["Right Arm"].Anchored = false
+        localPlayer.Character["Left Leg"].Anchored = false
+        localPlayer.Character["Right Leg"].Anchored = false
+    else
+        OrionLib:MakeNotification({
+            Name = "Not Allowed",
+            Content = "You need to be a survivor to use this.",
+            Image = "rbxassetid://96055863684080",
+            Time = 3
+        })
+    end
+end
+
 -- Tabs
 
 local mainTab = Window:MakeTab({
@@ -961,6 +1047,12 @@ local mainTab = Window:MakeTab({
 
 local espTab = Window:MakeTab({
 	Name = "ESP",
+	Icon = "rbxassetid://4483345998",
+	PremiumOnly = false
+})
+
+local playerTab = Window:MakeTab({
+	Name = "Player",
 	Icon = "rbxassetid://4483345998",
 	PremiumOnly = false
 })
@@ -997,6 +1089,12 @@ local farmTab = Window:MakeTab({
 
 local lobbyTab = Window:MakeTab({
 	Name = "Lobby",
+	Icon = "rbxassetid://4483345998",
+	PremiumOnly = false
+})
+
+local autobuyTab = Window:MakeTab({
+	Name = "Autobuy",
 	Icon = "rbxassetid://4483345998",
 	PremiumOnly = false
 })
@@ -1168,6 +1266,19 @@ settingsSection:AddSlider({
 	Callback = function(Value)
         ESP_RefreshRate = Value/1000
 	end    
+})
+
+--[----]--
+
+local itemSpecialSection = playerTab:AddSection({
+	Name = "Special"
+})
+
+itemSpecialSection:AddButton({
+	Name = "Godmode Anchor",
+	Callback = function()
+        StartGodmodeAnchor()
+  	end    
 })
 
 --[----]--
@@ -1565,6 +1676,75 @@ lobbyOptionSection:AddButton({
   	end    
 })
 
+--[----]--
+
+local autobuyToggleSection = autobuyTab:AddSection({
+	Name = "Toggle"
+})
+
+autobuyToggleSection:AddToggle({
+	Name = "Purchasing Active",
+	Default = false,
+	Callback = function(Value)
+        Autobuy_Enabled = Value
+
+        if Autobuy_Enabled == true then
+            AutoBuyItems()
+        end
+	end    
+})
+
+local autobuyAvailableSection = autobuyTab:AddSection({
+	Name = "Available"
+})
+
+autobuyAvailableSection:AddToggle({
+	Name = "Flashlight",
+	Default = false,
+	Callback = function(Value)
+        Autobuy_Flashlight = Value
+	end    
+})
+
+autobuyAvailableSection:AddToggle({
+	Name = "First Aid Kit",
+	Default = false,
+	Callback = function(Value)
+        Autobuy_FirstAidKit = Value
+	end    
+})
+
+autobuyAvailableSection:AddToggle({
+	Name = "Ultra Flashlight",
+	Default = false,
+	Callback = function(Value)
+        Autobuy_UltraFlashlight = Value
+	end    
+})
+
+autobuyAvailableSection:AddToggle({
+	Name = "Stephano",
+	Default = false,
+	Callback = function(Value)
+        Autobuy_Stephano = Value
+	end    
+})
+
+autobuyAvailableSection:AddToggle({
+	Name = "Doom's Gauntlet",
+	Default = false,
+	Callback = function(Value)
+        Autobuy_Gauntlet = Value
+	end    
+})
+
+autobuyAvailableSection:AddToggle({
+	Name = "Weird Mask",
+	Default = false,
+	Callback = function(Value)
+        Autobuy_WeirdMask = Value
+	end    
+})
 
 --[----]--
 
@@ -1579,6 +1759,7 @@ infoSection:AddLabel(`Using 'Reset' may break your game.`)
 
 local contactSection = helpTab:AddSection({
 	Name = "Contact"
+
 })
 
 contactSection:AddParagraph("If something stops working, check F9 console for errors.","Take a screenshot of any errors and send them to me.")
@@ -1589,6 +1770,7 @@ local updatesSection = changelogTab:AddSection({
 	Name = "Updates"
 })
 
+updatesSection:AddParagraph(`- Autobuy tab, Player tab, Better ESP`,"Added (2.0.4)")
 updatesSection:AddParagraph(`- Changelog tab`,"Added (2.0.3)")
 
 --[----]--
