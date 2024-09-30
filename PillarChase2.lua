@@ -51,6 +51,7 @@ local Interaction_InstantComplete = false
 local Farm_MaxCoins = false
 local Farm_AutoMove = false
 local Farm_AutoJump = false
+local Farm_AutoLeave = false
 
 local Color_Killer = nil
 local Color_Zombie = nil
@@ -69,6 +70,8 @@ local Autobuy_UltraFlashlight = false
 local Autobuy_Stephano = false
 local Autobuy_Gauntlet = false
 local Autobuy_WeirdMask = false
+
+local refreshingESP = false
 
 local RoleToIcon = {
     ["Survivor"] = {
@@ -104,7 +107,22 @@ local ItemToMaxStats = {
     };
 }
 
-local refreshingESP = false
+local AdminList = {
+    "The_BladeNinja";
+	"DaSnappleApple";
+	"PhoenixFinch";
+	"Toket_suu";
+	"GojiDev8";
+	"peter12121212";
+	"Bowserson21";
+	"Skeletor427";
+	"Taurolostiryx";
+	"Rawalc";
+	"DrOchikondaMimu";
+	"MySteR4y2";
+	"punkywav";
+	"HazyOwl";
+}
 
 -- Functions
 
@@ -1037,6 +1055,18 @@ function StartGodmodeAnchor()
     end
 end
 
+function AutoLeaveAdmin()
+    while Farm_AutoLeave == true do
+        for _, player in Players:GetPlayers() do
+            if table.find(AdminList, player.Name) then
+                localPlayer:Kick("[Force Exit]: Admin joined experience.")
+            end
+        end
+
+        task.wait(0.1)
+    end
+end
+
 -- Tabs
 
 local mainTab = Window:MakeTab({
@@ -1557,6 +1587,22 @@ antiAFKSection:AddToggle({
 	end    
 })
 
+local safetySection = farmTab:AddSection({
+	Name = "Safety"
+})
+
+safetySection:AddToggle({
+	Name = "Auto Leave (Admin)",
+	Default = false,
+	Callback = function(Value)
+        Farm_AutoLeave = Value
+
+        if Farm_AutoLeave == true then
+            AutoLeaveAdmin()
+        end
+	end    
+})
+
 --[----]--
 
 local colorPlayerSection = colorTab:AddSection({
@@ -1770,7 +1816,7 @@ local updatesSection = changelogTab:AddSection({
 	Name = "Updates"
 })
 
-updatesSection:AddParagraph(`- Autobuy tab, Player tab, Better ESP`,"Added (2.0.4)")
+updatesSection:AddParagraph(`- Autobuy tab, Player tab, Better ESP, Safer farming`,"Added (2.0.4)")
 updatesSection:AddParagraph(`- Changelog tab`,"Added (2.0.3)")
 
 --[----]--
