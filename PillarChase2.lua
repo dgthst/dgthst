@@ -3,6 +3,8 @@
 local OrionLib = loadstring(game:HttpGet(('https://raw.githubusercontent.com/shlexware/Orion/main/source')))()
 local Window = OrionLib:MakeWindow({Name = "Pillar Chase Panel", HidePremium = false, Intro = false, IntroText = "SIGMA ™", SaveConfig = true, ConfigFolder = "PC2Config"})
 
+local currentVersion = "2.0.3"
+
 -- Services
 
 local Players = game:GetService("Players")
@@ -34,10 +36,14 @@ local Ability_AutoJumpMX = false
 local Ability_AutoSolveBaldi = false
 
 local Item_ItemSelected = nil
+local Item_InfiniteStephano = false
+local Item_InfiniteFlashlight = false
+local Item_InfiniteGauntlet = false
 
 local Graphic_AntiDebris = false
 local Graphic_Fullbright = false
 local Graphic_Brightness = nil
+local Graphic_BorgerSuit = false
 
 local Interaction_IncreasedRange = false
 local Interaction_InstantComplete = false
@@ -68,6 +74,25 @@ local RoleToIcon = {
     ["Zombie"] = {
         ["Image"] = 117719382297326;
         ["Color"] = Color3.fromRGB(255, 255, 255);
+    };
+}
+
+local ItemToMaxStats = {
+    ["Stephano"] = {
+        ["Time"] = nil;
+        ["Light"] = 100;
+    };
+    ["Flashlight"] = {
+        ["Time"] = 155;
+        ["Light"] = 100;
+    };
+    ["Ultra Flashlight"] = {
+        ["Time"] = 200;
+        ["Light"] = 125;
+    };
+    ["Doom's Gauntlet"] = {
+        ["Time"] = nil;
+        ["Light"] = 0;
     };
 }
 
@@ -185,14 +210,10 @@ function RefreshESP()
         local currentObjectives = GetCurrentObjectives()
 
         for _, objectiveInstance in pairs(currentObjectives) do
-            if not objectiveInstance:FindFirstChild("ObjectivePrompt", true) then continue end
+            local proximityPrompt = objectiveInstance:FindFirstChildWhichIsA("ProximityPrompt", true)
+            if not proximityPrompt then continue end
 
-            if objectiveInstance:IsA("Model") then
-                local mainPart = objectiveInstance.PrimaryPart or objectiveInstance:FindFirstChildOfClass("BasePart", true)
-                AddObjectiveESP(mainPart, objectiveInstance.Name)
-            else
-                AddObjectiveESP(objectiveInstance, objectiveInstance.Name)
-            end                
+            AddObjectiveESP(objectiveInstance, objectiveInstance.Name)           
         end
     end
 
@@ -254,17 +275,21 @@ function AddItemESP(itemModel)
     end
 end
 
-function AddObjectiveESP(objectivePart, objectiveName)
+function AddObjectiveESP(objectiveInstance, objectiveName)  
     if ESP_ShowHighlight then
-        CreateESPHighlight(objectivePart, Color_Objective)
+        CreateESPHighlight(objectiveInstance, Color_Objective)
     end
 
+    if objectiveInstance:IsA("Model") then
+        objectiveInstance = objectiveInstance.PrimaryPart or objectiveInstance:FindFirstChildOfClass("BasePart", true)
+    end  
+
     if ESP_ShowName == true then
-        AddPartLabel(objectivePart, objectiveName)
+        AddPartLabel(objectiveInstance, objectiveName)
     end
 
     if ESP_ShowIcon == true then
-        AddImageLabel(objectivePart, Color3.fromRGB(255, 255, 255), 12011030159)
+        AddImageLabel(objectiveInstance, Color3.fromRGB(255, 255, 255), 12011030159)
     end
 end
 
@@ -473,7 +498,6 @@ function GetCurrentObjectives()
     
             if folderName:find("objective") then
                 for _, objectiveModel in child:GetChildren() do
-                    print(`{objectiveModel.Name}: {objectiveModel.ClassName}`)
                     table.insert(objectiveTable, objectiveModel)
                 end
             end
@@ -524,35 +548,31 @@ function GetMaxCoins()
 end
 
 function ActivateFullbright()
-    while Graphic_Fullbright == true do
-        local atmosphere = Lighting:FindFirstChild("Atmosphere")
-        if atmosphere then
-            atmosphere.Density = 0
-            atmosphere.Offset = 0
-            atmosphere.Glare = 0
-            atmosphere.Haze = 0
-        end
-
-        local bloom = Lighting:FindFirstChild("Bloom")
-        if bloom then
-            bloom.Enabled = false
-        end
-
-        local blur = Lighting:FindFirstChild("Blur")
-        if blur then
-            blur.Enabled = false 
-        end
-
-        Lighting.GlobalShadows = false
-        Lighting.ClockTime = 12
-        Lighting.FogStart = 10
-        Lighting.FogEnd = 500000000
-        Lighting.Ambient = Color3.fromRGB(255, 255, 255)
-        Lighting.OutdoorAmbient = Color3.fromRGB(255, 255, 255)
-        Lighting.Brightness = Graphic_Brightness
-
-        task.wait(0.25)
+    local atmosphere = Lighting:FindFirstChild("Atmosphere")
+    if atmosphere then
+        atmosphere.Density = 0
+        atmosphere.Offset = 0
+        atmosphere.Glare = 0
+        atmosphere.Haze = 0
     end
+
+    local bloom = Lighting:FindFirstChild("Bloom")
+    if bloom then
+        bloom.Enabled = false
+    end
+
+    local blur = Lighting:FindFirstChild("Blur")
+    if blur then
+        blur.Enabled = false 
+    end
+
+    Lighting.GlobalShadows = false
+    Lighting.ClockTime = 12
+    Lighting.FogStart = 10
+    Lighting.FogEnd = 500000000
+    Lighting.Ambient = Color3.fromRGB(255, 255, 255)
+    Lighting.OutdoorAmbient = Color3.fromRGB(255, 255, 255)
+    Lighting.Brightness = Graphic_Brightness
 end
 
 function ActivateAntiDebris()
@@ -564,50 +584,61 @@ function ActivateAntiDebris()
         if not character then return end
 
         local infectedUI = game:FindFirstChild("Infected", true)
-        if infectedUI then infectedUI:Destroy() end
+        if infectedUI then
+            infectedUI:Destroy()
+        end
+
+        local stephanoUI = gameGui:FindFirstChild("StephanoLife")
+        if stephanoUI then
+            -- CONTINUE CODING
+        end
 
         local foundFlash = gameGui:FindFirstChild("Flash")
         if foundFlash then
-            foundFlash.Visible = false
+            foundFlash:Destroy()
         end
 
         local ventErrorScript = gameGui:FindFirstChild("VentError")
         if ventErrorScript then
-            ventErrorScript.Enabled = false
+            ventErrorScript:Destroy()
         end
 
         local springScare = gameGui:FindFirstChild("SpringScare")
         if springScare then
-            springScare.Visible = false
+            springScare:Destroy()
         end
 
         local bloodUI = gameGui:FindFirstChild("BloodUI")
         if bloodUI then
-            bloodUI.Visible = false
+            bloodUI:Destroy()
         end
 
         local debuffsFrame = gameGui:FindFirstChild("Debuffs")
         if debuffsFrame then
-            debuffsFrame.Visible = false
+            debuffsFrame:Destroy()
         end
 
         local monsterUIFrame = gameGui:FindFirstChild("MonsterUI")
         if monsterUIFrame then
             local radiatedUIFrame = monsterUIFrame:FindFirstChild("RadiatedUI")
-            if radiatedUIFrame then radiatedUIFrame:Destroy() end
+            if radiatedUIFrame then
+                radiatedUIFrame:Destroy()
+            end
         end
 
         local overlaysFrame = gameGui:FindFirstChild("Overlays")
         if overlaysFrame then
             for _, child in overlaysFrame:GetChildren() do
                 if child:IsA("ImageLabel") or child:IsA("Frame") then
-                    child.Visible = false
+                    child:Destroy()
                 end
             end
         end
 
         local blindScript = character:FindFirstChild("Blind")
-        if blindScript then blindScript:Destroy() end
+        if blindScript then
+            blindScript:Destroy()
+        end
         
         local foundMap = workspace:FindFirstChild("Map")
 
@@ -660,19 +691,27 @@ function AutoJump()
 end
 
 function AutoSolveBaldi()
-    while Ability_AutoSolveBaldi == true do
-        local gameGui = PlayerGui:FindFirstChild("GameGui")
-        if not gameGui then return end
-        
-        local thinkpadUI = gameGui.thinkpadUI
-        if not thinkpadUI then return end
+    local gameGui = PlayerGui:FindFirstChild("GameGui")
+    if not gameGui then return end
+    
+    local thinkpadUI = gameGui:FindFirstChild("ThinkPad")
+    if not thinkpadUI then return end
 
-        local mathQuestion = thinkpadUI.Questions.Question.Value
+    local mathQuestion = thinkpadUI.Question.Text
+    local newQuestion = mathQuestion:gsub("=", "")
+    local foundPlus = string.find(newQuestion, "+")
 
-        -- CONTINUE CODING
-
-        task.wait(0.1)
+    local answerNumber
+    
+    if foundPlus then
+        local splitEquation = newQuestion:split("+")
+        answerNumber = splitEquation[1] + splitEquation[2]
+    else
+        local splitEquation = newQuestion:split("-")
+        answerNumber = splitEquation[1] - splitEquation[2]
     end
+
+    thinkpadUI.TextBox.Text = answerNumber
 end
 
 function ToggleLobbyRadio()
@@ -759,7 +798,7 @@ function MaximizeInteractDistance()
 
         for _, doorModel in pairs(currentDoors) do
             local proximityPrompt = doorModel:FindFirstChildWhichIsA("ProximityPrompt", true)
-
+            
             if proximityPrompt then
                 proximityPrompt.MaxActivationDistance = 17
             end
@@ -842,6 +881,76 @@ function AutoPlayFNF()
     end
 end
 
+function GetPlayerInventory()
+    local character = localPlayer.character
+    if not character then return end
+
+    local inventory = character:FindFirstChild("Inventory")
+    if not inventory then return end
+
+    return inventory
+end
+
+function InfiniteStephano()
+    local inventory = GetPlayerInventory()
+    if not inventory then return end
+
+    local foundItem = inventory:FindFirstChild("Stephano")
+    if not foundItem then return end
+
+    for possibleStat, statValue in pairs(ItemToMaxStats["Stephano"]) do
+        if statValue ~= nil then
+            foundItem[possibleStat].Value = statValue
+        end
+    end
+end
+
+function InfiniteFlashlight()
+    local inventory = GetPlayerInventory()
+    if not inventory then return end
+
+    for _, foundItem in inventory:GetChildren() do
+        local itemName = foundItem.Name:lower()
+        if not itemName:find("flashlight") then continue end
+
+        for possibleStat, statValue in pairs(ItemToMaxStats[foundItem.Name]) do
+            if statValue ~= nil then
+                foundItem[possibleStat].Value = statValue
+            end
+        end
+    end
+end
+
+function InfiniteGauntlet()
+    local inventory = GetPlayerInventory()
+    if not inventory then return end
+
+    local foundItem = inventory:FindFirstChild("Doom's Gauntlet")
+    if not foundItem then return end
+
+    for possibleStat, statValue in pairs(ItemToMaxStats["Doom's Gauntlet"]) do
+        if statValue ~= nil then
+            foundItem[possibleStat].Value = statValue
+        end
+    end
+end
+
+function EnableBorgerSuit()
+    while Graphic_BorgerSuit == true do
+        for _, player in Players:GetPlayers() do
+            local character = player.Character
+            if not character then continue end
+
+            local BorgerPart = character:FindFirstChild("Borger")
+            if not BorgerPart then continue end
+
+            BorgerPart.Transparency = 0
+        end
+
+        task.wait(0.5)
+    end
+end
+
 -- Tabs
 
 local mainTab = Window:MakeTab({
@@ -904,9 +1013,15 @@ local helpTab = Window:MakeTab({
 	PremiumOnly = false
 })
 
+local changelogTab = Window:MakeTab({
+	Name = "Changelog",
+	Icon = "rbxassetid://4483345998",
+	PremiumOnly = false
+})
+
 -- Orion UI
 
-mainTab:AddParagraph(`This GUI covers nearly everything possible on the client-side.`,"Version 2.0")
+mainTab:AddParagraph(`This GUI covers nearly everything possible on the client-side.`,`Version {currentVersion}`)
 
 --[----]--
 
@@ -1073,7 +1188,13 @@ autoCounterSection:AddToggle({
 	Name = "Auto Solve (Baldi)",
 	Default = false,
 	Callback = function(Value)
-        WorkInProgressNotification(Value)
+        Ability_AutoSolveBaldi = Value
+
+        if Ability_AutoSolveBaldi == true then
+            RunService:BindToRenderStep("AutoSolveBaldi", Enum.RenderPriority.Last.Value, AutoSolveBaldi)
+        else
+            RunService:UnbindFromRenderStep("AutoSolveBaldi")
+        end
 	end    
 })
 
@@ -1089,13 +1210,21 @@ activeCounterSection:AddToggle({
 	end    
 })
 
---[----]--
-
-local itemUsageSection = itemTab:AddSection({
-	Name = "Usage"
+activeCounterSection:AddToggle({
+	Name = "Instant Break (Vapor)",
+	Default = false,
+	Callback = function(Value)
+        WorkInProgressNotification(Value)
+	end    
 })
 
-itemUsageSection:AddDropdown({
+--[----]--
+
+local itemSpawnSection = itemTab:AddSection({
+	Name = "Browser"
+})
+
+itemSpawnSection:AddDropdown({
 	Name = "Item List",
 	Default = "None",
 	Options = {"None", "Weird Mask"},
@@ -1104,7 +1233,7 @@ itemUsageSection:AddDropdown({
 	end    
 })
 
-itemUsageSection:AddButton({
+itemSpawnSection:AddButton({
 	Name = "Use Selected Item",
 	Callback = function()
         if Item_ItemSelected == "None" then
@@ -1118,6 +1247,52 @@ itemUsageSection:AddButton({
             BecomeZombie()
         end
   	end    
+})
+
+local itemUsageSection = itemTab:AddSection({
+	Name = "Usage"
+})
+
+itemUsageSection:AddToggle({
+	Name = "Infinite Stephano",
+	Default = false,
+	Callback = function(Value)
+        Item_InfiniteStephano = Value
+
+        if Item_InfiniteStephano == true then
+            RunService:BindToRenderStep("InfiniteStephano", Enum.RenderPriority.Last.Value, InfiniteStephano)
+        else
+            RunService:UnbindFromRenderStep("InfiniteStephano")
+        end
+	end    
+})
+
+itemUsageSection:AddToggle({
+	Name = "Infinite Flashlight",
+	Default = false,
+	Callback = function(Value)
+        Item_InfiniteFlashlight = Value
+
+        if Item_InfiniteFlashlight == true then
+            RunService:BindToRenderStep("InfiniteFlashlight", Enum.RenderPriority.Last.Value, InfiniteFlashlight)
+        else
+            RunService:UnbindFromRenderStep("InfiniteFlashlight")
+        end
+	end    
+})
+
+itemUsageSection:AddToggle({
+	Name = "Infinite Gauntlet",
+	Default = false,
+	Callback = function(Value)
+        Item_InfiniteGauntlet = Value
+
+        if Item_InfiniteGauntlet == true then
+            RunService:BindToRenderStep("InfiniteGauntlet", Enum.RenderPriority.Last.Value, InfiniteGauntlet)
+        else
+            RunService:UnbindFromRenderStep("InfiniteGauntlet")
+        end
+	end    
 })
 
 --[----]--
@@ -1175,7 +1350,9 @@ worldSection:AddToggle({
         Graphic_Fullbright = Value
 
         if Graphic_Fullbright == true then
-            ActivateFullbright()
+            RunService:BindToRenderStep("Fullbright", Enum.RenderPriority.Last.Value, ActivateFullbright)
+        else
+            RunService:UnbindFromRenderStep("Fullbright")
         end
 	end    
 })
@@ -1192,7 +1369,32 @@ worldSection:AddSlider({
     Flag = "Brightness_Graphic",
 	Callback = function(Value)
         Graphic_Brightness = Value/100
-        ActivateFullbright()
+	end    
+})
+
+local additionalSection = graphicTab:AddSection({
+	Name = "Additional"
+})
+
+additionalSection:AddToggle({
+	Name = "Borger Suit",
+	Default = false,
+	Callback = function(Value)
+        Graphic_BorgerSuit = Value
+
+        if Graphic_BorgerSuit == true then
+            EnableBorgerSuit()
+        else
+            for _, player in Players:GetPlayers() do
+                local character = player.Character
+                if not character then continue end
+    
+                local BorgerPart = character:FindFirstChild("Borger")
+                if not BorgerPart then continue end
+    
+                BorgerPart.Transparency = 1
+            end
+        end
 	end    
 })
 
@@ -1380,6 +1582,16 @@ local contactSection = helpTab:AddSection({
 })
 
 contactSection:AddParagraph("If something stops working, check F9 console for errors.","Take a screenshot of any errors and send them to me.")
+
+--[----]--
+
+local updatesSection = changelogTab:AddSection({
+	Name = "Updates"
+})
+
+updatesSection:AddParagraph(`- Changelog tab`,"Added (2.0.3)")
+
+--[----]--
 
 -- Runtime
 
