@@ -3,7 +3,7 @@
 local OrionLib = loadstring(game:HttpGet(('https://raw.githubusercontent.com/shlexware/Orion/main/source')))()
 local Window = OrionLib:MakeWindow({Name = "Pillar Chase Panel", HidePremium = false, Intro = false, IntroText = "SIGMA ™", SaveConfig = true, ConfigFolder = "PC2Config"})
 
-local currentVersion = "2.0.5"
+local currentVersion = "2.0.6"
 
 -- Services
 
@@ -44,6 +44,9 @@ local Graphic_AntiDebris = false
 local Graphic_Fullbright = false
 local Graphic_Brightness = nil
 local Graphic_BorgerSuit = false
+local Graphic_ThirdPerson = false
+local Graphic_FOVEnabled = false
+local Graphic_FOVNumber = nil
 
 local Interaction_IncreasedRange = false
 local Interaction_InstantComplete = false
@@ -72,6 +75,8 @@ local Autobuy_Gauntlet = false
 local Autobuy_WeirdMask = false
 
 local refreshingESP = false
+
+local fovConnection = nil
 
 local RoleToIcon = {
     ["Survivor"] = {
@@ -308,7 +313,7 @@ function AddObjectiveESP(objectiveInstance, objectiveName)
     end
 
     if objectiveInstance:IsA("Model") then
-        objectiveInstance = objectiveInstance.PrimaryPart or objectiveInstance:FindFirstChildOfClass("BasePart", true)
+        objectiveInstance = objectiveInstance.PrimaryPart or objectiveInstance:FindFirstChildWhichIsA("BasePart", true)
     end  
 
     if ESP_ShowName == true then
@@ -331,6 +336,15 @@ function AddAbilityESP(model)
 end
 
 function AddHealthLabel(character)
+    local StatFolder = character:FindFirstChild("Aspects")
+    if not StatFolder then return end
+
+    local currentHealth = StatFolder:FindFirstChild("Health")
+    if not currentHealth then return end
+
+    local maxHealth = currentHealth:FindFirstChild("Max")
+    if not maxHealth then return end
+
     local newHealth = Instance.new("BillboardGui")
     newHealth.Name = "espHealth"
     newHealth.Size = UDim2.new(5,0,2,0)
@@ -347,10 +361,6 @@ function AddHealthLabel(character)
     
     local newStroke = Instance.new("UIStroke")
     newStroke.Parent = newFrameBackground
-
-    local StatFolder = character.Aspects
-    local currentHealth = StatFolder.Health
-    local maxHealth = currentHealth.Max
 
     local calculatedSize = currentHealth.Value/maxHealth.Value or 0
 
@@ -413,8 +423,8 @@ function AddFriendLabel(parentFrame)
 end
 
 function AddDistanceLabel(character)
-    local mainPart1 = localPlayer.Character.PrimaryPart or localPlayer.Character:FindFirstChildOfClass("BasePart")
-    local mainPart2 = character.PrimaryPart or character:FindFirstChildOfClass("BasePart")
+    local mainPart1 = localPlayer.Character.PrimaryPart or localPlayer.Character:FindFirstChildWhichIsA("BasePart")
+    local mainPart2 = character.PrimaryPart or character:FindFirstChildWhichIsA("BasePart")
     
     if not mainPart1 then return end
     if not mainPart2 then return end
@@ -575,6 +585,7 @@ function GetCurrentDoors()
 
     if foundMap then
         for _, child in foundMap:GetChildren() do
+            if child.Name == "doorhandler" then continue end -- CONTINUE WHEN YOU GET MAP
             local childString = child.Name:lower()
 
             if childString:find("door") then
@@ -587,11 +598,7 @@ function GetCurrentDoors()
 end
 
 function GetMaxCoins()
-    while Farm_MaxCoins == true do
-        localPlayer.CoinsToGive.Value = 55
-
-        task.wait()
-    end
+    localPlayer.CoinsToGive.Value = 55
 end
 
 function ActivateFullbright()
@@ -622,118 +629,145 @@ function ActivateFullbright()
     Lighting.Brightness = Graphic_Brightness
 end
 
-function ActivateAntiDebris()
-    while Graphic_AntiDebris == true do
-        local gameGui = PlayerGui:FindFirstChild("GameGui")
-        if not gameGui then return end
+function UpdateAntiDebris()
+    local gameGui = PlayerGui:FindFirstChild("GameGui")
+    if not gameGui then return end
 
-        local character = localPlayer.Character
-        if not character then return end
+    local character = localPlayer.Character
+    if not character then return end
 
-        local infectedUI = game:FindFirstChild("Infected", true)
-        if infectedUI then
-            infectedUI:Destroy()
+    local infectedUI = game:FindFirstChild("Infected", true)
+    if infectedUI then
+        infectedUI:Destroy()
+    end
+
+    local stephanoUI = gameGui:FindFirstChild("StephanoLife")
+    if stephanoUI then
+        -- CONTINUE CODING
+    end
+
+    local foundFlash = gameGui:FindFirstChild("Flash")
+    if foundFlash then
+        foundFlash:Destroy()
+    end
+
+    local ventErrorScript = gameGui:FindFirstChild("VentError")
+    if ventErrorScript then
+        ventErrorScript:Destroy()
+    end
+
+    local springScare = gameGui:FindFirstChild("SpringScare")
+    if springScare then
+        springScare:Destroy()
+    end
+
+    local bloodUI = gameGui:FindFirstChild("BloodUI")
+    if bloodUI then
+        --bloodUI:Destroy()
+    end
+
+    local debuffsFrame = gameGui:FindFirstChild("Debuffs")
+    if debuffsFrame then
+        for _, child in debuffsFrame:GetChildren() do
+            if not child:IsA("ImageLabel") then continue end
+
+            child.Transparency = 1
+            child.ImageTransparency = 1
         end
+    end
 
-        local stephanoUI = gameGui:FindFirstChild("StephanoLife")
-        if stephanoUI then
-            -- CONTINUE CODING
+    local monsterUIFrame = gameGui:FindFirstChild("MonsterUI")
+    if monsterUIFrame then
+        local radiatedUIFrame = monsterUIFrame:FindFirstChild("RadiatedUI")
+        if radiatedUIFrame then
+            radiatedUIFrame:Destroy()
         end
+    end
 
-        local foundFlash = gameGui:FindFirstChild("Flash")
-        if foundFlash then
-            foundFlash:Destroy()
+    local overlaysFrame = gameGui:FindFirstChild("Overlays")
+    if overlaysFrame then
+        for _, child in overlaysFrame:GetChildren() do
+            if not child:IsA("ImageLabel") then continue end
+
+            child.Transparency = 1
+            child.ImageTransparency = 1
+            child.Visible = false
         end
+    end
 
-        local ventErrorScript = gameGui:FindFirstChild("VentError")
-        if ventErrorScript then
-            ventErrorScript:Destroy()
-        end
+    local blindScript = character:FindFirstChild("Blind")
+    if blindScript then
+        blindScript:Destroy()
+    end
+    
+    local foundMap = workspace:FindFirstChild("Map")
 
-        local springScare = gameGui:FindFirstChild("SpringScare")
-        if springScare then
-            springScare:Destroy()
-        end
-
-        local bloodUI = gameGui:FindFirstChild("BloodUI")
-        if bloodUI then
-            bloodUI:Destroy()
-        end
-
-        local debuffsFrame = gameGui:FindFirstChild("Debuffs")
-        if debuffsFrame then
-            debuffsFrame:Destroy()
-        end
-
-        local monsterUIFrame = gameGui:FindFirstChild("MonsterUI")
-        if monsterUIFrame then
-            local radiatedUIFrame = monsterUIFrame:FindFirstChild("RadiatedUI")
-            if radiatedUIFrame then
-                radiatedUIFrame:Destroy()
+    if foundMap then
+        for _, model in foundMap:GetChildren() do
+            if model.Name == "HearingTape" then
+                model.AntiHear.Volume = 0.1
             end
         end
-
-        local overlaysFrame = gameGui:FindFirstChild("Overlays")
-        if overlaysFrame then
-            for _, child in overlaysFrame:GetChildren() do
-                if child:IsA("ImageLabel") or child:IsA("Frame") then
-                    child:Destroy()
-                end
-            end
-        end
-
-        local blindScript = character:FindFirstChild("Blind")
-        if blindScript then
-            blindScript:Destroy()
-        end
-        
-        local foundMap = workspace:FindFirstChild("Map")
-
-        if foundMap then
-            for _, model in foundMap:GetChildren() do
-                if model.Name == "HearingTape" then
-                    model.AntiHear.Volume = 0.1
-                end
-            end
-        end
-
-        task.wait()
     end
 end
 
 function AutoMove()
-    local character = localPlayer.Character
-    if not character then return end
-
-    local humanoid = character:FindFirstChildOfClass("Humanoid")
-    if not humanoid then return end
-
-    local currentDirection = os.time() % 4
-
-    if currentDirection == 0 then
-        localPlayer.Character.Humanoid:Move(Vector3.new(0, 0, -1), true)
-    elseif currentDirection == 1 then
-        localPlayer.Character.Humanoid:Move(Vector3.new(1, 0, 0), true)
-    elseif currentDirection == 2 then
-        localPlayer.Character.Humanoid:Move(Vector3.new(0, 0, 1), true)
-    elseif currentDirection == 3 then
-        localPlayer.Character.Humanoid:Move(Vector3.new(-1, 0, 0), true)
+    if KickMessageFound() then
+        local character = localPlayer.Character
+        if not character then return end
+    
+        local humanoid = character:FindFirstChildWhichIsA("Humanoid")
+        if not humanoid then return end
+    
+        local currentDirection = os.time() % 4
+    
+        if currentDirection == 0 then
+            localPlayer.Character.Humanoid:Move(Vector3.new(0, 0, -1), true)
+        elseif currentDirection == 1 then
+            localPlayer.Character.Humanoid:Move(Vector3.new(1, 0, 0), true)
+        elseif currentDirection == 2 then
+            localPlayer.Character.Humanoid:Move(Vector3.new(0, 0, 1), true)
+        elseif currentDirection == 3 then
+            localPlayer.Character.Humanoid:Move(Vector3.new(-1, 0, 0), true)
+        end
     end
 end
 
+function KickMessageFound()
+    local lobbyGui = PlayerGui:FindFirstChild("LobbyGUI")
+    if not lobbyGui then return end
+
+    local notificationsUI = lobbyGui:FindFirstChild("Notifications", true)
+    if notificationsUI then
+        for _, notificationLabel in notificationsUI.Notifications:GetChildren() do
+            if not notificationLabel:IsA("ImageLabel") then continue end
+
+            local textLabel = notificationLabel:FindFirstChildWhichIsA("TextLabel")
+            if textLabel then
+
+                local textContents = textLabel.Text:lower()
+                if textContents:find("kicked") then
+                    print("Found")
+                    return true
+                end
+            end
+        end
+    end
+
+    return false
+end
+
 function AutoJump()
-    while Farm_AutoJump == true do
+    if KickMessageFound() then
         local character = localPlayer.Character
         if not character then return end
-
-        local humanoid = character:FindFirstChildOfClass("Humanoid")
+    
+        local humanoid = character:FindFirstChildWhichIsA("Humanoid")
         if not humanoid then return end
-
+    
         if humanoid.FloorMaterial ~= Enum.Material.Air then
             humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
         end
-
-        task.wait(1.75)
     end
 end
 
@@ -790,7 +824,7 @@ function KillHumanoid()
     local character = localPlayer.Character
 
     if character then
-        local humanoid = character:FindFirstChildOfClass("Humanoid")
+        local humanoid = character:FindFirstChildWhichIsA("Humanoid")
 
         humanoid.Health = 0
     end
@@ -807,8 +841,6 @@ function BecomeZombie()
 
     if playerIsSurvivor then
         TurnEvilEvent:FireServer()
-        task.wait(1.5)
-        SetCameraFOV(90)
     else
         OrionLib:MakeNotification({
             Name = "Not Allowed",
@@ -889,10 +921,6 @@ function InstantCompleteInteraction()
 
         task.wait(0.5)
     end
-end
-
-function SetCameraFOV(fovNumber)
-    CurrentCamera.FieldOfView = fovNumber
 end
 
 function WorkInProgressNotification(toggle)
@@ -982,7 +1010,7 @@ function InfiniteGauntlet()
     end
 end
 
-function EnableBorgerSuit()
+function AddBorgerSuit()
     while Graphic_BorgerSuit == true do
         for _, player in Players:GetPlayers() do
             local character = player.Character
@@ -1073,6 +1101,10 @@ function AutoLeaveAdmin()
     end
 end
 
+function UpdateFOV()
+    CurrentCamera.FieldOfView = Graphic_FOVNumber
+end
+
 -- Tabs
 
 local mainTab = Window:MakeTab({
@@ -1135,8 +1167,8 @@ local autobuyTab = Window:MakeTab({
 	PremiumOnly = false
 })
 
-local colorTab = Window:MakeTab({
-	Name = "Color",
+local configTab = Window:MakeTab({
+	Name = "Config",
 	Icon = "rbxassetid://4483345998",
 	PremiumOnly = false
 })
@@ -1314,6 +1346,13 @@ itemSpecialSection:AddButton({
 	Name = "Godmode Anchor",
 	Callback = function()
         StartGodmodeAnchor()
+
+        OrionLib:MakeNotification({
+            Name = "Server Side",
+            Content = "Your position has been locked in place.",
+            Image = "rbxassetid://17889070713",
+            Time = 5
+        })
   	end    
 })
 
@@ -1481,7 +1520,9 @@ screenSection:AddToggle({
         Graphic_AntiDebris = Value
 
         if Graphic_AntiDebris == true then
-            ActivateAntiDebris()
+            RunService:BindToRenderStep("UpdateAntiDebris", Enum.RenderPriority.Last.Value, UpdateAntiDebris)
+        else
+            RunService:UnbindFromRenderStep("UpdateAntiDebris")
         end
 	end    
 })
@@ -1519,6 +1560,40 @@ worldSection:AddSlider({
 	end    
 })
 
+local cameraSection = graphicTab:AddSection({
+	Name = "Camera"
+})
+
+cameraSection:AddToggle({
+	Name = "Set FOV",
+	Default = false,
+	Callback = function(Value)
+        Graphic_ThirdPerson = Value
+
+        if Graphic_ThirdPerson == true then
+            fovConnection = RunService.PreRender:Connect(UpdateFOV)
+        elseif fovConnection then
+            fovConnection:Disconnect()
+            fovConnection = nil
+        end
+	end    
+})
+
+cameraSection:AddSlider({
+	Name = "Degrees",
+	Min = 0,
+	Max = 120,
+	Default = 75,
+	Color = Color3.fromRGB(255,255,255),
+	Increment = 5,
+	ValueName = "°",
+    Save = true,
+    Flag = "FOVNumber_Graphic",
+	Callback = function(Value)
+        Graphic_FOVNumber = Value
+	end    
+})
+
 local additionalSection = graphicTab:AddSection({
 	Name = "Additional"
 })
@@ -1530,7 +1605,7 @@ additionalSection:AddToggle({
         Graphic_BorgerSuit = Value
 
         if Graphic_BorgerSuit == true then
-            EnableBorgerSuit()
+            AddBorgerSuit()
         else
             for _, player in Players:GetPlayers() do
                 local character = player.Character
@@ -1558,7 +1633,9 @@ rewardSection:AddToggle({
         Farm_MaxCoins = Value
 
         if Farm_MaxCoins == true then
-            GetMaxCoins()
+            RunService:BindToRenderStep("MaxCoins", Enum.RenderPriority.Last.Value, GetMaxCoins)
+        else
+            RunService:UnbindFromRenderStep("MaxCoins")
         end
 	end    
 })
@@ -1588,7 +1665,9 @@ antiAFKSection:AddToggle({
         Farm_AutoJump = Value
 
         if Farm_AutoJump == true then
-            AutoJump()
+            RunService:BindToRenderStep("AutoJump", Enum.RenderPriority.Last.Value, AutoJump)
+        else
+            RunService:UnbindFromRenderStep("AutoJump")
         end
 	end    
 })
@@ -1611,8 +1690,8 @@ safetySection:AddToggle({
 
 --[----]--
 
-local colorPlayerSection = colorTab:AddSection({
-	Name = "Players"
+local colorPlayerSection = configTab:AddSection({
+	Name = "Player Color"
 })
 
 colorPlayerSection:AddColorpicker({
@@ -1645,8 +1724,8 @@ colorPlayerSection:AddColorpicker({
 	end	  
 })
 
-local colorObjectSection = colorTab:AddSection({
-	Name = "Objects"
+local colorObjectSection = configTab:AddSection({
+	Name = "Object Color"
 })
 
 colorObjectSection:AddColorpicker({
@@ -1677,6 +1756,18 @@ colorObjectSection:AddColorpicker({
 	Callback = function(Value)
         Color_Ability = Value
 	end	  
+})
+
+local saveSection = configTab:AddSection({
+	Name = "Save Options"
+})
+
+saveSection:AddToggle({
+	Name = "Save Toggles",
+	Default = false,
+	Callback = function(Value)
+        WorkInProgressNotification(Value)
+	end    
 })
 
 --[----]--
@@ -1822,6 +1913,7 @@ local updatesSection = changelogTab:AddSection({
 	Name = "Updates"
 })
 
+updatesSection:AddParagraph(`- Added FOV, fixed bugs`,"Added (2.0.6)")
 updatesSection:AddParagraph(`- Updated ESP, fixed missing PrimaryPart`,"Added (2.0.5)")
 updatesSection:AddParagraph(`- Autobuy tab, Player tab, Better ESP, Safer farming`,"Added (2.0.4)")
 updatesSection:AddParagraph(`- Changelog tab`,"Added (2.0.3)")
