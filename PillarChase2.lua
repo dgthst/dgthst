@@ -531,11 +531,15 @@ function GetCurrentAbilities()
         local samsoniteMap = foundMap:FindFirstChild("SamsoniteMap")
 
         if samsoniteMap then
-            for _, realDoor in samsoniteMap.DoorBank:GetChildren() do
-                if realDoor.DoorPrompt.Enabled == true then
-                    realDoor.Name = "Escape"
-                    table.insert(abilityTable, realDoor)
-                end
+            local doorBank = SamsoniteMap:FindFirstChild("DoorBank")
+
+            if doorBank then
+                for _, realDoor in doorBank:GetChildren() do
+                    if realDoor.DoorPrompt.Enabled == true then
+                        realDoor.Name = "Escape"
+                        table.insert(abilityTable, realDoor)
+                    end
+                end 
             end
         end
     end
