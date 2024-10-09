@@ -3,7 +3,7 @@
 local OrionLib = loadstring(game:HttpGet(('https://raw.githubusercontent.com/shlexware/Orion/main/source')))()
 local Window = OrionLib:MakeWindow({Name = "Pillar Chase Panel", HidePremium = false, Intro = false, IntroText = "SIGMA ™", SaveConfig = true, ConfigFolder = "PC2Config"})
 
-local currentVersion = "2.0.4"
+local currentVersion = "2.0.5"
 
 -- Services
 
@@ -413,6 +413,14 @@ function AddFriendLabel(parentFrame)
 end
 
 function AddDistanceLabel(character)
+    local mainPart1 = localPlayer.Character.PrimaryPart or localPlayer.Character:FindFirstChildOfClass("BasePart")
+    local mainPart2 = character.PrimaryPart or character:FindFirstChildOfClass("BasePart")
+    
+    if not mainPart1 then return end
+    if not mainPart2 then return end
+
+    local calculatedDistance = (mainPart1.Position - mainPart2.Position).Magnitude or 0
+
     local newDistance = Instance.new("BillboardGui")
     newDistance.Name = "espDistance"
     newDistance.Size = UDim2.new(5,0,2,0)
@@ -420,8 +428,6 @@ function AddDistanceLabel(character)
     newDistance.StudsOffset = Vector3.new(0,0.5,0)
     newDistance.AlwaysOnTop = true
     newDistance.Parent = character.PrimaryPart
-
-    local calculatedDistance = (localPlayer.Character.PrimaryPart.Position - character.PrimaryPart.Position).Magnitude or 0
 
     local newTextLabel = Instance.new("TextLabel")
     newTextLabel.AnchorPoint = Vector2.new(0.5,0.5)
@@ -1816,6 +1822,7 @@ local updatesSection = changelogTab:AddSection({
 	Name = "Updates"
 })
 
+updatesSection:AddParagraph(`- Updated ESP, fixed missing PrimaryPart`,"Added (2.0.5)")
 updatesSection:AddParagraph(`- Autobuy tab, Player tab, Better ESP, Safer farming`,"Added (2.0.4)")
 updatesSection:AddParagraph(`- Changelog tab`,"Added (2.0.3)")
 
