@@ -3,7 +3,7 @@
 local OrionLib = loadstring(game:HttpGet(('https://raw.githubusercontent.com/shlexware/Orion/main/source')))()
 local Window = OrionLib:MakeWindow({Name = "Pillar Chase Panel", HidePremium = false, Intro = false, IntroText = "SIGMA ™", SaveConfig = true, ConfigFolder = "PC2Config"})
 
-local currentVersion = "2.0.6"
+local currentVersion = "2.0.8"
 
 -- Services
 
@@ -11,12 +11,15 @@ local Players = game:GetService("Players")
 local Lighting = game:GetService("Lighting")
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
 
 -- Variables
 
 local localPlayer = Players.LocalPlayer
 local PlayerGui = localPlayer.PlayerGui
 local CurrentCamera = workspace.CurrentCamera
+
+local PLAYER_StaminaConservation = false
 
 local ESP_Enabled = false
 local ESP_ViewKiller = false
@@ -40,6 +43,9 @@ local Item_InfiniteStephano = false
 local Item_InfiniteFlashlight = false
 local Item_InfiniteGauntlet = false
 
+local Notification_PopUpsEnabled = false
+local Notification_AttackCooldown = false
+
 local Graphic_AntiDebris = false
 local Graphic_Fullbright = false
 local Graphic_Brightness = nil
@@ -55,6 +61,8 @@ local Farm_MaxCoins = false
 local Farm_AutoMove = false
 local Farm_AutoJump = false
 local Farm_AutoLeave = false
+local Farm_AutoReset = false
+local Farm_AutoMask = false
 
 local Color_Killer = nil
 local Color_Zombie = nil
@@ -67,16 +75,22 @@ local Lobby_MuteRadio = false
 local Lobby_AutoPlayFNF = false
 
 local Autobuy_Enabled = false
-local Autobuy_Flashlight = false
-local Autobuy_FirstAidKit = false
-local Autobuy_UltraFlashlight = false
-local Autobuy_Stephano = false
-local Autobuy_Gauntlet = false
-local Autobuy_WeirdMask = false
 
 local refreshingESP = false
+local autoActionCooldown = false
 
 local fovConnection = nil
+local antiDebrisConnection = nil
+local fullbrightConnection = nil
+
+local AutobuyList = {
+    ["Flashlight"] = false;
+    ["First Aid Kit"] = false;
+    ["Ultra Flashlight"] = false;
+    ["Stephano"] = false;
+    ["Doom's Guantlet"] = false;
+    ["Weird Mask"] = false;
+}
 
 local RoleToIcon = {
     ["Survivor"] = {
@@ -279,7 +293,7 @@ function AddPlayerESP(character, espColor, roleType)
     end
 
     if ESP_ShowIcon then
-        local imageLabel = AddImageLabel(character.PrimaryPart, RoleToIcon[roleType].Color, RoleToIcon[roleType].Image)
+        local imageLabel = AddImageLabel(character.PrimaryPart, RoleToIcon[roleType].Color, RoleToIcon[roleType].Image, 0)
         if localPlayer:IsFriendsWith(Players:GetPlayerFromCharacter(character).UserId) then
             AddFriendLabel(imageLabel)
         end
@@ -321,7 +335,7 @@ function AddObjectiveESP(objectiveInstance, objectiveName)
     end
 
     if ESP_ShowIcon == true then
-        AddImageLabel(objectiveInstance, Color3.fromRGB(255, 255, 255), 12011030159)
+        AddImageLabel(objectiveInstance, Color3.fromRGB(255, 255, 255), 12011030159, 3.5)
     end
 end
 
@@ -389,10 +403,11 @@ function AddHealthLabel(character)
     newStroke.Parent = newTextLabel
 end
 
-function AddImageLabel(part, imageColor, imageID)
+function AddImageLabel(part, imageColor, imageID, yOffset)
     local newIcon = Instance.new("BillboardGui")
     newIcon.Name = "espIcon"
     newIcon.Size = UDim2.new(2.5,0,2.5,0)
+    newIcon.StudsOffset = Vector3.new(0, yOffset, 0)
     newIcon.AlwaysOnTop = true
     newIcon.Parent = part
 
@@ -477,6 +492,232 @@ function AddPartLabel(part, labelText)
     newStroke.Parent = newTextLabel
 end
 
+function UpdateCooldownUI(createUI)
+	local newUI = PlayerGui:FindFirstChild("Cooldown")
+
+	if createUI then
+		if not newUI then
+			newUI = Instance.new("ScreenGui")
+			newUI.Name = "Cooldown"
+			newUI.DisplayOrder = 1000000
+			newUI.IgnoreGuiInset = true
+			newUI.ResetOnSpawn = false
+			newUI.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+			newUI.Parent = PlayerGui
+		end
+
+		return newUI
+	elseif newUI then
+		if #newUI:GetChildren() == 0 then
+			newUI:Destroy()
+		end
+	end
+end
+
+function UpdatePopupUI(createUI)
+	local newUI = PlayerGui:FindFirstChild("Popups")
+	
+	if createUI then
+		if not newUI then
+			newUI = Instance.new("ScreenGui")
+			newUI.Name = "Popups"
+			newUI.DisplayOrder = 1000000
+			newUI.IgnoreGuiInset = true
+			newUI.ResetOnSpawn = false
+			newUI.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+			newUI.Parent = PlayerGui
+			
+			local OffsetFrame = Instance.new("Frame")
+			OffsetFrame.Name = "Offset"
+			OffsetFrame.Transparency = 1
+			OffsetFrame.AnchorPoint = Vector2.new(0.5, 1)
+			OffsetFrame.Position = UDim2.new(0.5, 0, 1, 0)
+			OffsetFrame.Size = UDim2.new(1, 0, 0.4, 0)
+			OffsetFrame.Parent = newUI
+
+			local OffsetListLayout = Instance.new("UIListLayout")
+			OffsetListLayout.Padding = UDim.new(0.04, 0)
+			OffsetListLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+			OffsetListLayout.Parent = OffsetFrame
+
+			local contentsFrame = Instance.new("Frame")
+			contentsFrame.Name = "Contents"
+			contentsFrame.Transparency = 1
+			contentsFrame.Size = UDim2.new(1, 0, 0.1, 0)
+			contentsFrame.Parent = OffsetFrame
+
+			local ContentListLayout = Instance.new("UIListLayout")
+			ContentListLayout.Padding = UDim.new(0.005, 0)
+			ContentListLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+			ContentListLayout.FillDirection = Enum.FillDirection.Horizontal
+			ContentListLayout.Parent = contentsFrame
+		end
+
+		return newUI
+	elseif newUI then
+		if #newUI:GetChildren() == 0 then
+			newUI:Destroy()
+		end
+	end
+end
+
+function CreateCooldown(cooldownTime)
+	local cooldownUI = UpdateCooldownUI(true)
+
+	local cooldownFrame = Instance.new("Frame")
+	cooldownFrame.Name = "Cooldown"
+	cooldownFrame.Transparency = 1
+	cooldownFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+	cooldownFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
+	cooldownFrame.Size = UDim2.new(1, 0, 1, 0)
+	cooldownFrame.Parent = cooldownUI
+
+	local canvasGroup = Instance.new("CanvasGroup")
+	canvasGroup.AnchorPoint = Vector2.new(0.5, 0.5)
+	canvasGroup.Position = UDim2.new(0.5, 0, 0.58, 0)
+	canvasGroup.Size = UDim2.new(0.12, 0, 0.1, 0)
+	canvasGroup.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+	canvasGroup.Parent = cooldownFrame
+
+	local UIAspectRatioConstraint = Instance.new("UIAspectRatioConstraint")
+	UIAspectRatioConstraint.AspectRatio = 20
+	UIAspectRatioConstraint.Parent = canvasGroup
+
+	local UICorner = Instance.new("UICorner")
+	UICorner.CornerRadius = UDim.new(1, 0)
+	UICorner.Parent = canvasGroup
+
+	local UIStroke = Instance.new("UIStroke")
+	UIStroke.Thickness = 2
+	UIStroke.Parent = canvasGroup
+
+	local fillerFrame = Instance.new("Frame")
+	fillerFrame.Name = "Filler"
+	fillerFrame.AnchorPoint = Vector2.new(0, 0.5)
+	fillerFrame.Position = UDim2.new(0, 0, 0.5, 0)
+	fillerFrame.Size = UDim2.new(1, 0, 1, 0)
+	fillerFrame.BackgroundColor3 = Color3.fromRGB(220, 0, 0)
+	fillerFrame.Parent = canvasGroup
+
+	local UICorner2 = Instance.new("UICorner")
+	UICorner2.CornerRadius = UDim.new(1, 0)
+	UICorner2.Parent = fillerFrame
+
+	local decreaseTween = TweenService:Create(fillerFrame, TweenInfo.new(cooldownTime, Enum.EasingStyle.Linear, Enum.EasingDirection.In, 0, false), {Size = UDim2.new(0, 0, fillerFrame.Size.Y.Scale, 0)})
+	decreaseTween:Play()
+
+	decreaseTween.Completed:Connect(function()
+		cooldownFrame:Destroy()
+		UpdateCooldownUI()
+	end)
+end
+
+function AddPopupFrame(popupText, popupTime)
+	local PopupFrame = UpdatePopupUI(true)
+	local ContentsFrame = PopupFrame.Offset.Contents
+	
+	local addedFrame = Instance.new("Frame")
+	addedFrame.Transparency = 1
+	addedFrame.Size = UDim2.new(1, 0, 1, 0)
+	addedFrame.LayoutOrder = 1
+	addedFrame.Parent = ContentsFrame
+	
+	local AddedFrameUIAspectRatio = Instance.new("UIAspectRatioConstraint")
+	AddedFrameUIAspectRatio.AspectRatio = 5
+	AddedFrameUIAspectRatio.Parent = addedFrame
+	
+	local addedImage = Instance.new("ImageLabel")
+	addedImage.Transparency = 1
+	addedImage.AnchorPoint = Vector2.new(1, 0.5)
+	addedImage.Position = UDim2.new(1, 0, 0.5, 0)
+	addedImage.Size = UDim2.new(1, 0, 1, 0)
+	addedImage.Image = "rbxassetid://133236435262285"
+	addedImage.ImageColor3 = Color3.fromRGB(255, 255, 255)
+	addedImage.Parent = addedFrame
+	
+	local AddedImageUIAspectRatio = Instance.new("UIAspectRatioConstraint")
+	AddedImageUIAspectRatio.AspectRatio = 1
+	AddedImageUIAspectRatio.Parent = addedImage
+	
+	local messageFrame = Instance.new("Frame")
+	messageFrame.LayoutOrder = 2
+	messageFrame.Transparency = 1
+	messageFrame.Size = UDim2.new(0, 0, 1, 0)
+	messageFrame.AutomaticSize = Enum.AutomaticSize.X
+	messageFrame.Parent = ContentsFrame
+	
+	local messageLabel = Instance.new("TextLabel")
+	messageLabel.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+	messageLabel.BackgroundTransparency = 0.6
+	messageLabel.AnchorPoint = Vector2.new(0, 0.5)
+	messageLabel.Position = UDim2.new(0, 0, 0.5, 0)
+	messageLabel.Size = UDim2.new(0, 0, 1, 0)
+	messageLabel.AutomaticSize = Enum.AutomaticSize.X
+	messageLabel.TextScaled = true
+	messageLabel.Font = Enum.Font.SourceSans
+	messageLabel.Text = ` {popupText} `
+	messageLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+	messageLabel.Parent = messageFrame
+	
+	local messageBorder = Instance.new("UIStroke")
+	messageBorder.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	messageBorder.Thickness = 2
+	messageBorder.Transparency = 0.4
+	messageBorder.Parent = messageLabel
+	
+	local messageStroke = Instance.new("UIStroke")
+	messageStroke.LineJoinMode = Enum.LineJoinMode.Bevel
+	messageStroke.Thickness = 1.5
+	messageStroke.Parent = messageLabel
+	
+	local timerFrame = Instance.new("Frame")
+	timerFrame.LayoutOrder = 3
+	timerFrame.Transparency = 1
+	timerFrame.Size = UDim2.new(1, 0, 1, 0)
+	timerFrame.Parent = ContentsFrame
+	
+	local TimerFrameUIAspectRatio = Instance.new("UIAspectRatioConstraint")
+	TimerFrameUIAspectRatio.AspectRatio = 5
+	TimerFrameUIAspectRatio.Parent = timerFrame
+	
+	local timerLabel = Instance.new("TextLabel")
+	timerLabel.BackgroundTransparency = 1
+	timerLabel.AnchorPoint = Vector2.new(0, 0.5)
+	timerLabel.Position = UDim2.new(0, 0, 0.5, 0)
+	timerLabel.Size = UDim2.new(1, 0, 1, 0)
+	timerLabel.TextScaled = true
+	timerLabel.Font = Enum.Font.SourceSans
+	timerLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+	timerLabel.TextXAlignment = Enum.TextXAlignment.Left
+	timerLabel.Parent = timerFrame
+	
+	local TimerUIAspectRatio = Instance.new("UIAspectRatioConstraint")
+	TimerUIAspectRatio.AspectRatio = 1
+	TimerUIAspectRatio.Parent = timerLabel
+	
+	local timerStroke = Instance.new("UIStroke")
+	timerStroke.LineJoinMode = Enum.LineJoinMode.Bevel
+	timerStroke.Thickness = 2
+	timerStroke.Parent = timerLabel
+	
+	task.spawn(function()
+		for currentTime = popupTime, 0, -0.1 do
+			local roundedNumber = math.ceil(currentTime * 10)/10
+
+			if tostring(roundedNumber):len() == 1 then
+				timerLabel.Text = `{roundedNumber}.0s`
+			else
+				timerLabel.Text = `{roundedNumber}s`
+			end
+			
+			task.wait(0.1)
+		end
+		
+		PopupFrame:Destroy()
+		UpdatePopupUI(false)
+	end)
+end
+
 function GetCurrentAbilities()
     local abilityTable = {}
     local foundMap = workspace:FindFirstChild("Map")
@@ -528,9 +769,9 @@ function GetCurrentAbilities()
             end
         end
 
-        local samsoniteMap = foundMap:FindFirstChild("SamsoniteMap")
+        local SamsoniteMap = foundMap:FindFirstChild("SamsoniteMap")
 
-        if samsoniteMap then
+        if SamsoniteMap then
             local doorBank = SamsoniteMap:FindFirstChild("DoorBank")
 
             if doorBank then
@@ -797,6 +1038,9 @@ function AutoSolveBaldi()
     end
 
     thinkpadUI.TextBox.Text = answerNumber
+
+    --[[mousemoveabs(0, 0)
+    mouse1click()]]
 end
 
 function ToggleLobbyRadio()
@@ -826,11 +1070,13 @@ end
 
 function KillHumanoid()
     local character = localPlayer.Character
+    if not character then return end
 
-    if character then
-        local humanoid = character:FindFirstChildWhichIsA("Humanoid")
+    local humanoid = character:FindFirstChildWhichIsA("Humanoid")
+    if not humanoid then return end
 
-        humanoid.Health = 0
+    if humanoid.Health > 0 then
+        humanoid.Health = 0 
     end
 end
 
@@ -1038,29 +1284,13 @@ function AutoBuyItems()
         local BuyItemEvent = LobbyGUI.ButtonFrames.ITEMSHOP.WorkItemGUI.BuyItem
         if not BuyItemEvent then return end
 
-        if Autobuy_Flashlight == true then
-            BuyItemEvent:FireServer(true, "Flashlight")
+        for item, buyBool in AutobuyList do
+            if buyBool == true then
+                BuyItemEvent:FireServer(true, item)
+            end
         end
 
-        if Autobuy_FirstAidKit == true then
-            BuyItemEvent:FireServer(true, "First Aid Kit")
-        end
-
-        if Autobuy_UltraFlashlight == true then
-            BuyItemEvent:FireServer(true, "Ultra Flashlight")
-        end
-
-        if Autobuy_Stephano == true then
-            BuyItemEvent:FireServer(true, "Stephano")
-        end
-
-        if Autobuy_Gauntlet == true then
-            BuyItemEvent:FireServer(true, "Doom's Gauntlet")
-        end
-
-        if Autobuy_WeirdMask == true then
-            BuyItemEvent:FireServer(true, "Weird Mask")
-        end
+        task.wait(0.1)
     end
 end
 
@@ -1105,8 +1335,77 @@ function AutoLeaveAdmin()
     end
 end
 
+function AutoReset()
+    while Farm_AutoReset == true do
+        if autoActionCooldown == false then
+            autoActionCooldown = true
+
+            task.delay(1, function()
+                autoActionCooldown = false
+            end)
+
+            local character = player.Character
+            if not character then continue end
+    
+            local humanoid = player:FindFirstChildWhichIsA("Humanoid")
+            if not humanoid then continue end 
+            
+            local playerIsSurvivor = character:FindFirstChild("Alive")
+    
+            if playerIsSurvivor and humanoid.Health > 0 then
+                KillHumanoid()
+            end
+        end
+
+        task.wait(0.1)
+    end
+end
+
+function AutoMask()
+    while Farm_AutoMask == true do
+        if autoActionCooldown == false then
+            autoActionCooldown = true
+
+            task.delay(1, function()
+                autoActionCooldown = false
+            end)
+            
+            local character = player.Character
+            if not character then continue end
+    
+            local humanoid = player:FindFirstChildWhichIsA("Humanoid")
+            if not humanoid then continue end 
+            
+            local playerIsSurvivor = character:FindFirstChild("Alive")
+    
+            if playerIsSurvivor then
+                BecomeZombie()
+            end
+        end
+
+        task.wait(0.1)
+    end
+end
+
 function UpdateFOV()
     CurrentCamera.FieldOfView = Graphic_FOVNumber
+end
+
+function ConserveStamina()
+    local character = localPlayer.Character
+    if not character then return end
+
+    local StatFolder = character:FindFirstChild("Aspects")
+    if not StatFolder then return end
+
+    local currentStamina = StatFolder:FindFirstChild("Stamina")
+    if not currentStamina then return end
+
+    if currentStamina.Value <= 3 then
+        StatFolder.CanSprint.Value = false
+    else
+        StatFolder.CanSprint.Value = true
+    end
 end
 
 -- Tabs
@@ -1143,6 +1442,12 @@ local itemTab = Window:MakeTab({
 
 local interactionTab = Window:MakeTab({
 	Name = "Interaction",
+	Icon = "rbxassetid://4483345998",
+	PremiumOnly = false
+})
+
+local notificationTab = Window:MakeTab({
+	Name = "Notifications",
 	Icon = "rbxassetid://4483345998",
 	PremiumOnly = false
 })
@@ -1196,7 +1501,7 @@ mainTab:AddParagraph(`This GUI covers nearly everything possible on the client-s
 --[----]--
 
 local espToggleSection = espTab:AddSection({
-	Name = "Toggle"
+	Name = "Vision"
 })
 
 espToggleSection:AddToggle({
@@ -1341,6 +1646,24 @@ settingsSection:AddSlider({
 })
 
 --[----]--
+
+local playerStatusSection = playerTab:AddSection({
+	Name = "Status"
+})
+
+playerStatusSection:AddToggle({
+	Name = "Stamina Conservation",
+	Default = false,
+	Callback = function(Value)
+        PLAYER_StaminaConservation = Value
+
+        if PLAYER_StaminaConservation == true then
+            RunService:BindToRenderStep("StaminaConservation", Enum.RenderPriority.First.Value, ConserveStamina)
+        else
+            RunService:UnbindFromRenderStep("StaminaConservation")
+        end
+	end    
+})
 
 local itemSpecialSection = playerTab:AddSection({
 	Name = "Special"
@@ -1513,6 +1836,51 @@ interactOptionsSection:AddToggle({
 
 --[----]--
 
+local popupSection = notificationTab:AddSection({
+	Name = "Pop-Up"
+})
+
+popupSection:AddToggle({
+	Name = "Pop-Ups Enabled",
+	Default = false,
+	Callback = function(Value)
+        Notification_PopUpsEnabled = Value
+        
+        WorkInProgressNotification(Value)
+	end    
+})
+
+local actionSection = notificationTab:AddSection({
+	Name = "Actions"
+})
+
+actionSection:AddToggle({
+	Name = "Show Attack Cooldown",
+	Default = false,
+	Callback = function(Value)
+        Notification_AttackCooldown = Value
+
+        WorkInProgressNotification(Value)
+	end    
+})
+
+actionSection:AddToggle({
+	Name = "Show Ability Usage",
+	Default = false,
+	Callback = function(Value)
+        Graphic_AntiDebris = Value
+
+        if Graphic_AntiDebris == true then
+            antiDebrisConnection = RunService.PreRender:Connect(UpdateAntiDebris)
+        elseif antiDebrisConnection then
+            antiDebrisConnection:Disconnect()
+            antiDebrisConnection = nil
+        end
+	end    
+})
+
+--[----]--
+
 local screenSection = graphicTab:AddSection({
 	Name = "Screen"
 })
@@ -1524,9 +1892,10 @@ screenSection:AddToggle({
         Graphic_AntiDebris = Value
 
         if Graphic_AntiDebris == true then
-            RunService:BindToRenderStep("UpdateAntiDebris", Enum.RenderPriority.Last.Value, UpdateAntiDebris)
-        else
-            RunService:UnbindFromRenderStep("UpdateAntiDebris")
+            antiDebrisConnection = RunService.PreRender:Connect(UpdateAntiDebris)
+        elseif antiDebrisConnection then
+            antiDebrisConnection:Disconnect()
+            antiDebrisConnection = nil
         end
 	end    
 })
@@ -1542,9 +1911,10 @@ worldSection:AddToggle({
         Graphic_Fullbright = Value
 
         if Graphic_Fullbright == true then
-            RunService:BindToRenderStep("Fullbright", Enum.RenderPriority.Last.Value, ActivateFullbright)
-        else
-            RunService:UnbindFromRenderStep("Fullbright")
+            fullbrightConnection = RunService.PreRender:Connect(ActivateFullbright)
+        elseif fullbrightConnection then
+            fullbrightConnection:Disconnect()
+            fullbrightConnection = nil
         end
 	end    
 })
@@ -1584,7 +1954,7 @@ cameraSection:AddToggle({
 })
 
 cameraSection:AddSlider({
-	Name = "Degrees",
+	Name = "FOV Degrees",
 	Min = 0,
 	Max = 120,
 	Default = 75,
@@ -1668,10 +2038,42 @@ antiAFKSection:AddToggle({
 	Callback = function(Value)
         Farm_AutoJump = Value
 
-        if Farm_AutoJump == true then
+        WorkInProgressNotification(Value)
+        
+        --[[if Farm_AutoJump == true then
             RunService:BindToRenderStep("AutoJump", Enum.RenderPriority.Last.Value, AutoJump)
         else
             RunService:UnbindFromRenderStep("AutoJump")
+        end]]
+	end    
+})
+
+local afkGameplaySection = farmTab:AddSection({
+	Name = "Gameplay"
+})
+
+afkGameplaySection:AddToggle({
+	Name = "Auto Reset (Survivor)",
+	Default = false,
+    Flag = "Farm_AutoReset",
+	Callback = function(Value)
+        Farm_AutoReset = Value
+
+        if Farm_AutoReset == true then
+            OrionLib.Flags["Farm_AutoMask"]:Set(false)
+        end
+	end    
+})
+
+afkGameplaySection:AddToggle({
+	Name = "Auto Mask (Survivor)",
+	Default = false,
+    Flag = "Farm_AutoMask",
+	Callback = function(Value)
+        Farm_AutoMask = Value
+
+        if Farm_AutoMask == true then
+            OrionLib.Flags["Farm_AutoReset"]:Set(false)
         end
 	end    
 })
@@ -1762,16 +2164,23 @@ colorObjectSection:AddColorpicker({
 	end	  
 })
 
-local saveSection = configTab:AddSection({
-	Name = "Save Options"
+local togglesSection = configTab:AddSection({
+	Name = "Toggles"
 })
 
-saveSection:AddToggle({
-	Name = "Save Toggles",
+togglesSection:AddToggle({
+	Name = "Save Values",
 	Default = false,
 	Callback = function(Value)
         WorkInProgressNotification(Value)
 	end    
+})
+
+togglesSection:AddButton({
+	Name = "Disable All",
+	Callback = function()
+        WorkInProgressNotification(Value)
+  	end    
 })
 
 --[----]--
@@ -1826,7 +2235,7 @@ lobbyOptionSection:AddButton({
 --[----]--
 
 local autobuyToggleSection = autobuyTab:AddSection({
-	Name = "Toggle"
+	Name = "Purchase"
 })
 
 autobuyToggleSection:AddToggle({
@@ -1849,7 +2258,7 @@ autobuyAvailableSection:AddToggle({
 	Name = "Flashlight",
 	Default = false,
 	Callback = function(Value)
-        Autobuy_Flashlight = Value
+        AutobuyList["Flashlight"] = Value
 	end    
 })
 
@@ -1857,7 +2266,7 @@ autobuyAvailableSection:AddToggle({
 	Name = "First Aid Kit",
 	Default = false,
 	Callback = function(Value)
-        Autobuy_FirstAidKit = Value
+        AutobuyList["First Aid Kit"] = Value
 	end    
 })
 
@@ -1865,7 +2274,7 @@ autobuyAvailableSection:AddToggle({
 	Name = "Ultra Flashlight",
 	Default = false,
 	Callback = function(Value)
-        Autobuy_UltraFlashlight = Value
+        AutobuyList["Ultra Flashlight"] = Value
 	end    
 })
 
@@ -1873,7 +2282,7 @@ autobuyAvailableSection:AddToggle({
 	Name = "Stephano",
 	Default = false,
 	Callback = function(Value)
-        Autobuy_Stephano = Value
+        AutobuyList["Stephano"] = Value
 	end    
 })
 
@@ -1881,7 +2290,7 @@ autobuyAvailableSection:AddToggle({
 	Name = "Doom's Gauntlet",
 	Default = false,
 	Callback = function(Value)
-        Autobuy_Gauntlet = Value
+        AutobuyList["Doom's Gauntlet"] = Value
 	end    
 })
 
@@ -1889,7 +2298,7 @@ autobuyAvailableSection:AddToggle({
 	Name = "Weird Mask",
 	Default = false,
 	Callback = function(Value)
-        Autobuy_WeirdMask = Value
+        AutobuyList["Weird Mask"] = Value
 	end    
 })
 
@@ -1917,7 +2326,9 @@ local updatesSection = changelogTab:AddSection({
 	Name = "Updates"
 })
 
-updatesSection:AddParagraph(`- Added FOV, fixed bugs`,"Added (2.0.6)")
+updatesSection:AddParagraph(`- Fixed Autobuy, Better farming, +bugs`,"Added (2.0.8)")
+updatesSection:AddParagraph(`- Updated Farm, +bugs`,"Added (2.0.7)")
+updatesSection:AddParagraph(`- Added FOV, +bugs`,"Added (2.0.6)")
 updatesSection:AddParagraph(`- Updated ESP, fixed missing PrimaryPart`,"Added (2.0.5)")
 updatesSection:AddParagraph(`- Autobuy tab, Player tab, Better ESP, Safer farming`,"Added (2.0.4)")
 updatesSection:AddParagraph(`- Changelog tab`,"Added (2.0.3)")
