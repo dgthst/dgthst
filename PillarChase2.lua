@@ -45,6 +45,7 @@ local Item_InfiniteGauntlet = false
 
 local Notification_PopUpsEnabled = false
 local Notification_AttackCooldown = false
+local Notification_AbilityUsage = false
 
 local Graphic_AntiDebris = false
 local Graphic_Fullbright = false
@@ -80,7 +81,6 @@ local refreshingESP = false
 local autoActionCooldown = false
 
 local fovConnection = nil
-local antiDebrisConnection = nil
 local fullbrightConnection = nil
 
 local AutobuyList = {
@@ -875,84 +875,88 @@ function ActivateFullbright()
 end
 
 function UpdateAntiDebris()
-    local gameGui = PlayerGui:FindFirstChild("GameGui")
-    if not gameGui then return end
+    while Graphic_AntiDebris == true do
+        local gameGui = PlayerGui:FindFirstChild("GameGui")
+        if not gameGui then return end
 
-    local character = localPlayer.Character
-    if not character then return end
+        local character = localPlayer.Character
+        if not character then return end
 
-    local infectedUI = game:FindFirstChild("Infected", true)
-    if infectedUI then
-        infectedUI:Destroy()
-    end
-
-    local stephanoUI = gameGui:FindFirstChild("StephanoLife")
-    if stephanoUI then
-        -- CONTINUE CODING
-    end
-
-    local foundFlash = gameGui:FindFirstChild("Flash")
-    if foundFlash then
-        foundFlash:Destroy()
-    end
-
-    local ventErrorScript = gameGui:FindFirstChild("VentError")
-    if ventErrorScript then
-        ventErrorScript:Destroy()
-    end
-
-    local springScare = gameGui:FindFirstChild("SpringScare")
-    if springScare then
-        springScare:Destroy()
-    end
-
-    local bloodUI = gameGui:FindFirstChild("BloodUI")
-    if bloodUI then
-        --bloodUI:Destroy()
-    end
-
-    local debuffsFrame = gameGui:FindFirstChild("Debuffs")
-    if debuffsFrame then
-        for _, child in debuffsFrame:GetChildren() do
-            if not child:IsA("ImageLabel") then continue end
-
-            child.Transparency = 1
-            child.ImageTransparency = 1
+        local infectedUI = game:FindFirstChild("Infected", true)
+        if infectedUI then
+            infectedUI:Destroy()
         end
-    end
 
-    local monsterUIFrame = gameGui:FindFirstChild("MonsterUI")
-    if monsterUIFrame then
-        local radiatedUIFrame = monsterUIFrame:FindFirstChild("RadiatedUI")
-        if radiatedUIFrame then
-            radiatedUIFrame:Destroy()
+        local stephanoUI = gameGui:FindFirstChild("StephanoLife")
+        if stephanoUI then
+            -- CONTINUE CODING
         end
-    end
 
-    local overlaysFrame = gameGui:FindFirstChild("Overlays")
-    if overlaysFrame then
-        for _, child in overlaysFrame:GetChildren() do
-            if not child:IsA("ImageLabel") then continue end
-
-            child.Transparency = 1
-            child.ImageTransparency = 1
-            child.Visible = false
+        local foundFlash = gameGui:FindFirstChild("Flash")
+        if foundFlash then
+            foundFlash:Destroy()
         end
-    end
 
-    local blindScript = character:FindFirstChild("Blind")
-    if blindScript then
-        blindScript:Destroy()
-    end
-    
-    local foundMap = workspace:FindFirstChild("Map")
+        local ventErrorScript = gameGui:FindFirstChild("VentError")
+        if ventErrorScript then
+            ventErrorScript:Destroy()
+        end
 
-    if foundMap then
-        for _, model in foundMap:GetChildren() do
-            if model.Name == "HearingTape" then
-                model.AntiHear.Volume = 0.1
+        local springScare = gameGui:FindFirstChild("SpringScare")
+        if springScare then
+            springScare:Destroy()
+        end
+
+        local bloodUI = gameGui:FindFirstChild("BloodUI")
+        if bloodUI then
+            --bloodUI:Destroy()
+        end
+
+        local debuffsFrame = gameGui:FindFirstChild("Debuffs")
+        if debuffsFrame then
+            for _, child in debuffsFrame:GetChildren() do
+                if not child:IsA("ImageLabel") then continue end
+
+                child.Transparency = 1
+                child.ImageTransparency = 1
             end
         end
+
+        local monsterUIFrame = gameGui:FindFirstChild("MonsterUI")
+        if monsterUIFrame then
+            local radiatedUIFrame = monsterUIFrame:FindFirstChild("RadiatedUI")
+            if radiatedUIFrame then
+                radiatedUIFrame:Destroy()
+            end
+        end
+
+        local overlaysFrame = gameGui:FindFirstChild("Overlays")
+        if overlaysFrame then
+            for _, child in overlaysFrame:GetChildren() do
+                if not child:IsA("ImageLabel") then continue end
+
+                child.Transparency = 1
+                child.ImageTransparency = 1
+                child.Visible = false
+            end
+        end
+
+        local blindScript = character:FindFirstChild("Blind")
+        if blindScript then
+            blindScript:Destroy()
+        end
+        
+        local foundMap = workspace:FindFirstChild("Map")
+
+        if foundMap then
+            for _, model in foundMap:GetChildren() do
+                if model.Name == "HearingTape" then
+                    model.AntiHear.Volume = 0.1
+                end
+            end
+        end
+
+        task.wait(0.1)
     end
 end
 
@@ -1459,7 +1463,7 @@ local graphicTab = Window:MakeTab({
 })
 
 local farmTab = Window:MakeTab({
-	Name = "Farm",
+	Name = "Automatic",
 	Icon = "rbxassetid://4483345998",
 	PremiumOnly = false
 })
@@ -1507,6 +1511,7 @@ local espToggleSection = espTab:AddSection({
 espToggleSection:AddToggle({
 	Name = "ESP Enabled",
 	Default = false,
+    Flag = "Toggle_ESPEnabled",
 	Callback = function(Value)
         ESP_Enabled = Value
 
@@ -1529,6 +1534,7 @@ local selectionSection = espTab:AddSection({
 selectionSection:AddToggle({
 	Name = "View Killer",
 	Default = false,
+    Flag = "Toggle_ViewKiller",
 	Callback = function(Value)
         ESP_ViewKiller = Value
 	end    
@@ -1537,6 +1543,7 @@ selectionSection:AddToggle({
 selectionSection:AddToggle({
 	Name = "View Survivor",
 	Default = false,
+    Flag = "Toggle_ViewSurvivor",
 	Callback = function(Value)
         ESP_ViewSurvivor = Value
 	end    
@@ -1545,6 +1552,7 @@ selectionSection:AddToggle({
 selectionSection:AddToggle({
 	Name = "View Item",
 	Default = false,
+    Flag = "Toggle_ViewItem",
 	Callback = function(Value)
         ESP_ViewItem = Value
 	end    
@@ -1553,6 +1561,7 @@ selectionSection:AddToggle({
 selectionSection:AddToggle({
 	Name = "View Objective",
 	Default = false,
+    Flag = "Toggle_ViewObjective",
 	Callback = function(Value)
         ESP_ViewObjective = Value
 	end    
@@ -1561,6 +1570,7 @@ selectionSection:AddToggle({
 selectionSection:AddToggle({
 	Name = "View Ability",
 	Default = false,
+    Flag = "Toggle_ViewAbility",
 	Callback = function(Value)
         ESP_ViewAbility = Value
 	end    
@@ -1573,6 +1583,7 @@ local addonSection = espTab:AddSection({
 addonSection:AddToggle({
 	Name = "Show Highlight",
 	Default = false,
+    Flag = "Toggle_ShowHighlight",
 	Callback = function(Value)
         ESP_ShowHighlight = Value
 	end    
@@ -1581,6 +1592,7 @@ addonSection:AddToggle({
 addonSection:AddToggle({
 	Name = "Show Name",
 	Default = false,
+    Flag = "Toggle_ShowName",
 	Callback = function(Value)
         ESP_ShowName = Value
 	end    
@@ -1589,6 +1601,7 @@ addonSection:AddToggle({
 addonSection:AddToggle({
 	Name = "Show Icon",
 	Default = false,
+    Flag = "Toggle_ShowIcon",
 	Callback = function(Value)
         ESP_ShowIcon = Value
 	end    
@@ -1597,6 +1610,7 @@ addonSection:AddToggle({
 addonSection:AddToggle({
 	Name = "Show Health",
 	Default = false,
+    Flag = "Toggle_ShowHealth",
 	Callback = function(Value)
         ESP_ShowHealth = Value
 	end    
@@ -1605,6 +1619,7 @@ addonSection:AddToggle({
 addonSection:AddToggle({
 	Name = "Show Distance",
 	Default = false,
+    Flag = "Toggle_ShowDistance",
 	Callback = function(Value)
         ESP_ShowDistance = Value
         RefreshESP()
@@ -1624,7 +1639,7 @@ settingsSection:AddSlider({
 	Increment = 5,
 	ValueName = "%",
     Save = true,
-    Flag = "Transparency_ESP",
+    Flag = "Flag_ESPTransparency",
 	Callback = function(Value)
         ESP_Transparency = Value/100
 	end    
@@ -1639,7 +1654,7 @@ settingsSection:AddSlider({
 	Increment = 25,
 	ValueName = "milliseconds",
     Save = true,
-    Flag = "RefreshRate_ESP",
+    Flag = "Flag_ESPRefreshRate",
 	Callback = function(Value)
         ESP_RefreshRate = Value/1000
 	end    
@@ -1654,6 +1669,7 @@ local playerStatusSection = playerTab:AddSection({
 playerStatusSection:AddToggle({
 	Name = "Stamina Conservation",
 	Default = false,
+    Flag = "Toggle_StaminaConservation",
 	Callback = function(Value)
         PLAYER_StaminaConservation = Value
 
@@ -1692,6 +1708,7 @@ local autoCounterSection = abilityTab:AddSection({
 autoCounterSection:AddToggle({
 	Name = "Auto Jump (MX)",
 	Default = false,
+    Flag = "Toggle_AutoJumpMX",
 	Callback = function(Value)
         WorkInProgressNotification(Value)
 	end    
@@ -1700,6 +1717,7 @@ autoCounterSection:AddToggle({
 autoCounterSection:AddToggle({
 	Name = "Auto Solve (Baldi)",
 	Default = false,
+    Flag = "Toggle_AutoSolveBaldi",
 	Callback = function(Value)
         Ability_AutoSolveBaldi = Value
 
@@ -1718,6 +1736,7 @@ local activeCounterSection = abilityTab:AddSection({
 activeCounterSection:AddToggle({
 	Name = "Instant Escape (EXE)",
 	Default = false,
+    Flag = "Toggle_InstantEscapeEXE",
 	Callback = function(Value)
         WorkInProgressNotification(Value)
 	end    
@@ -1726,6 +1745,7 @@ activeCounterSection:AddToggle({
 activeCounterSection:AddToggle({
 	Name = "Instant Break (Vapor)",
 	Default = false,
+    Flag = "Toggle_InstantBreakVapor",
 	Callback = function(Value)
         WorkInProgressNotification(Value)
 	end    
@@ -1769,6 +1789,7 @@ local itemUsageSection = itemTab:AddSection({
 itemUsageSection:AddToggle({
 	Name = "Infinite Stephano",
 	Default = false,
+    Flag = "Toggle_InfiniteStephano",
 	Callback = function(Value)
         Item_InfiniteStephano = Value
 
@@ -1783,6 +1804,7 @@ itemUsageSection:AddToggle({
 itemUsageSection:AddToggle({
 	Name = "Infinite Flashlight",
 	Default = false,
+    Flag = "Toggle_InfiniteFlashlight",
 	Callback = function(Value)
         Item_InfiniteFlashlight = Value
 
@@ -1797,6 +1819,7 @@ itemUsageSection:AddToggle({
 itemUsageSection:AddToggle({
 	Name = "Infinite Gauntlet",
 	Default = false,
+    Flag = "Toggle_InfiniteGauntlet",
 	Callback = function(Value)
         Item_InfiniteGauntlet = Value
 
@@ -1817,6 +1840,7 @@ local interactOptionsSection = interactionTab:AddSection({
 interactOptionsSection:AddToggle({
 	Name = "Maximize Interact Distance",
 	Default = false,
+    Flag = "Toggle_MaximizeInteractDistance",
 	Callback = function(Value)
         Interaction_IncreasedRange = Value
 
@@ -1829,6 +1853,7 @@ interactOptionsSection:AddToggle({
 interactOptionsSection:AddToggle({
 	Name = "Instant Complete Interaction",
 	Default = false,
+    Flag = "Toggle_InstantCompleteInteraction",
 	Callback = function(Value)
         WorkInProgressNotification(Value)
 	end    
@@ -1843,6 +1868,7 @@ local popupSection = notificationTab:AddSection({
 popupSection:AddToggle({
 	Name = "Pop-Ups Enabled",
 	Default = false,
+    Flag = "Toggle_PopUpsEnabled",
 	Callback = function(Value)
         Notification_PopUpsEnabled = Value
         
@@ -1857,6 +1883,7 @@ local actionSection = notificationTab:AddSection({
 actionSection:AddToggle({
 	Name = "Show Attack Cooldown",
 	Default = false,
+    Flag = "Toggle_ShowAttackCooldown",
 	Callback = function(Value)
         Notification_AttackCooldown = Value
 
@@ -1867,15 +1894,11 @@ actionSection:AddToggle({
 actionSection:AddToggle({
 	Name = "Show Ability Usage",
 	Default = false,
+    Flag = "Toggle_ShowAbilityUsage",
 	Callback = function(Value)
-        Graphic_AntiDebris = Value
+        Notification_AbilityUsage = Value
 
-        if Graphic_AntiDebris == true then
-            antiDebrisConnection = RunService.PreRender:Connect(UpdateAntiDebris)
-        elseif antiDebrisConnection then
-            antiDebrisConnection:Disconnect()
-            antiDebrisConnection = nil
-        end
+        WorkInProgressNotification(Value)
 	end    
 })
 
@@ -1888,14 +1911,12 @@ local screenSection = graphicTab:AddSection({
 screenSection:AddToggle({
 	Name = "Anti Debris",
 	Default = false,
+    Flag = "Toggle_AntiDebris",
 	Callback = function(Value)
         Graphic_AntiDebris = Value
 
         if Graphic_AntiDebris == true then
-            antiDebrisConnection = RunService.PreRender:Connect(UpdateAntiDebris)
-        elseif antiDebrisConnection then
-            antiDebrisConnection:Disconnect()
-            antiDebrisConnection = nil
+            UpdateAntiDebris()
         end
 	end    
 })
@@ -1907,6 +1928,7 @@ local worldSection = graphicTab:AddSection({
 worldSection:AddToggle({
 	Name = "Fullbright",
 	Default = false,
+    Flag = "Toggle_Fullbright",
 	Callback = function(Value)
         Graphic_Fullbright = Value
 
@@ -1941,6 +1963,7 @@ local cameraSection = graphicTab:AddSection({
 cameraSection:AddToggle({
 	Name = "Set FOV",
 	Default = false,
+    Flag = "Toggle_SetFOV",
 	Callback = function(Value)
         Graphic_ThirdPerson = Value
 
@@ -1962,7 +1985,7 @@ cameraSection:AddSlider({
 	Increment = 5,
 	ValueName = "°",
     Save = true,
-    Flag = "FOVNumber_Graphic",
+    Flag = "Flag_FOVDegrees",
 	Callback = function(Value)
         Graphic_FOVNumber = Value
 	end    
@@ -1975,6 +1998,7 @@ local additionalSection = graphicTab:AddSection({
 additionalSection:AddToggle({
 	Name = "Borger Suit",
 	Default = false,
+    Flag = "Toggle_BorgerSuit",
 	Callback = function(Value)
         Graphic_BorgerSuit = Value
 
@@ -2003,6 +2027,7 @@ local rewardSection = farmTab:AddSection({
 rewardSection:AddToggle({
 	Name = "Max Coins",
 	Default = false,
+    Flag = "Toggle_MaxCoins",
 	Callback = function(Value)
         Farm_MaxCoins = Value
 
@@ -2021,6 +2046,7 @@ local antiAFKSection = farmTab:AddSection({
 antiAFKSection:AddToggle({
 	Name = "Auto Walk",
 	Default = false,
+    Flag = "Toggle_FarmAutoWalk",
 	Callback = function(Value)
         Farm_AutoMove = Value
 
@@ -2035,6 +2061,7 @@ antiAFKSection:AddToggle({
 antiAFKSection:AddToggle({
 	Name = "Auto Jump",
 	Default = false,
+    Flag = "Toggle_FarmAutoJump",
 	Callback = function(Value)
         Farm_AutoJump = Value
 
@@ -2055,7 +2082,7 @@ local afkGameplaySection = farmTab:AddSection({
 afkGameplaySection:AddToggle({
 	Name = "Auto Reset (Survivor)",
 	Default = false,
-    Flag = "Farm_AutoReset",
+    Flag = "Toggle_FarmAutoReset",
 	Callback = function(Value)
         Farm_AutoReset = Value
 
@@ -2068,7 +2095,7 @@ afkGameplaySection:AddToggle({
 afkGameplaySection:AddToggle({
 	Name = "Auto Mask (Survivor)",
 	Default = false,
-    Flag = "Farm_AutoMask",
+    Flag = "Toggle_FarmAutoMask",
 	Callback = function(Value)
         Farm_AutoMask = Value
 
@@ -2085,6 +2112,7 @@ local safetySection = farmTab:AddSection({
 safetySection:AddToggle({
 	Name = "Auto Leave (Admin)",
 	Default = false,
+    Flag = "Toggle_FarmAutoLeave",
 	Callback = function(Value)
         Farm_AutoLeave = Value
 
@@ -2171,6 +2199,7 @@ local togglesSection = configTab:AddSection({
 togglesSection:AddToggle({
 	Name = "Save Values",
 	Default = false,
+    Flag = "Toggle_SaveValues",
 	Callback = function(Value)
         WorkInProgressNotification(Value)
 	end    
@@ -2179,7 +2208,11 @@ togglesSection:AddToggle({
 togglesSection:AddButton({
 	Name = "Disable All",
 	Callback = function()
-        WorkInProgressNotification(Value)
+        for flag, _ in pairs(OrionLib.Flags) do
+            if not flag:find("Toggle") then continue end
+
+            OrionLib.Flags[flag]:Set(false)
+        end
   	end    
 })
 
@@ -2192,6 +2225,7 @@ local lobbyWorldSection = lobbyTab:AddSection({
 lobbyWorldSection:AddToggle({
 	Name = "Mute Radio",
 	Default = false,
+    Flag = "Toggle_MuteLobbyRadio",
 	Callback = function(Value)
         Lobby_MuteRadio = Value
 
@@ -2206,6 +2240,7 @@ local lobbyArcadeSection = lobbyTab:AddSection({
 lobbyArcadeSection:AddToggle({
 	Name = "Auto Play",
 	Default = false,
+    Flag = "Toggle_AutoPlayFNF",
 	Callback = function(Value)
         WorkInProgressNotification(Value)
 
@@ -2241,6 +2276,7 @@ local autobuyToggleSection = autobuyTab:AddSection({
 autobuyToggleSection:AddToggle({
 	Name = "Purchasing Active",
 	Default = false,
+    Flag = "Toggle_PurchasingActive",
 	Callback = function(Value)
         Autobuy_Enabled = Value
 
@@ -2257,6 +2293,7 @@ local autobuyAvailableSection = autobuyTab:AddSection({
 autobuyAvailableSection:AddToggle({
 	Name = "Flashlight",
 	Default = false,
+    Flag = "Toggle_AutobuyFlashlight",
 	Callback = function(Value)
         AutobuyList["Flashlight"] = Value
 	end    
@@ -2265,6 +2302,7 @@ autobuyAvailableSection:AddToggle({
 autobuyAvailableSection:AddToggle({
 	Name = "First Aid Kit",
 	Default = false,
+    Flag = "Toggle_AutobuyFirstAidKit",
 	Callback = function(Value)
         AutobuyList["First Aid Kit"] = Value
 	end    
@@ -2273,6 +2311,7 @@ autobuyAvailableSection:AddToggle({
 autobuyAvailableSection:AddToggle({
 	Name = "Ultra Flashlight",
 	Default = false,
+    Flag = "Toggle_AutobuyUltraFlashlight",
 	Callback = function(Value)
         AutobuyList["Ultra Flashlight"] = Value
 	end    
@@ -2281,6 +2320,7 @@ autobuyAvailableSection:AddToggle({
 autobuyAvailableSection:AddToggle({
 	Name = "Stephano",
 	Default = false,
+    Flag = "Toggle_AutobuyStephano",
 	Callback = function(Value)
         AutobuyList["Stephano"] = Value
 	end    
@@ -2289,6 +2329,7 @@ autobuyAvailableSection:AddToggle({
 autobuyAvailableSection:AddToggle({
 	Name = "Doom's Gauntlet",
 	Default = false,
+    Flag = "Toggle_AutobuyDoomsGauntlet",
 	Callback = function(Value)
         AutobuyList["Doom's Gauntlet"] = Value
 	end    
@@ -2297,6 +2338,7 @@ autobuyAvailableSection:AddToggle({
 autobuyAvailableSection:AddToggle({
 	Name = "Weird Mask",
 	Default = false,
+    Flag = "Toggle_AutobuyWeirdMask",
 	Callback = function(Value)
         AutobuyList["Weird Mask"] = Value
 	end    
