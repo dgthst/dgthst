@@ -297,6 +297,9 @@ function AddPlayerESP(character, espColor, roleType)
         if localPlayer:IsFriendsWith(Players:GetPlayerFromCharacter(character).UserId) then
             AddFriendLabel(imageLabel)
         end
+        if roleType == "Survivor" then
+            AddStatusLabel(character, imageLabel)
+        end
     end
 
     if ESP_ShowDistance == true then
@@ -434,6 +437,30 @@ function AddFriendLabel(parentFrame)
     newImageLabel.Image = `rbxassetid://128275723342163`
     newImageLabel.ImageTransparency = 0.2
     newImageLabel.ScaleType = Enum.ScaleType.Fit
+    newImageLabel.Parent = parentFrame
+end
+
+function AddStatusLabel(character, parentFrame)
+    local StatFolder = character:FindFirstChild("Aspects")
+    if not StatFolder then return end
+
+    local currentHealth = StatFolder:FindFirstChild("Health")
+    if not currentHealth then return end
+    
+    local newImageLabel = Instance.new("ImageLabel")
+    newImageLabel.AnchorPoint = Vector2.new(0,0)
+    newImageLabel.Position = UDim2.new(-0.2,0,-0.2,0)
+    newImageLabel.Size = UDim2.new(0.4,0,0.4,0)
+    newImageLabel.BackgroundTransparency = 1
+    newImageLabel.ImageTransparency = 0.2
+    newImageLabel.ScaleType = Enum.ScaleType.Fit
+
+    if currentHealth.Value > 20 then
+        newImageLabel.Image = "rbxassetid://138274629807181"
+    else
+        newImageLabel.Image = "rbxassetid://137914020707389"
+    end
+
     newImageLabel.Parent = parentFrame
 end
 
@@ -1040,11 +1067,16 @@ function AutoSolveBaldi()
         local splitEquation = newQuestion:split("-")
         answerNumber = splitEquation[1] - splitEquation[2]
     end
-
+    
     thinkpadUI.TextBox.Text = answerNumber
 
-    --[[mousemoveabs(0, 0)
-    mouse1click()]]
+    local enterButton = thinkpadUI.Enter
+
+    local absPos = button.AbsolutePosition
+    local absSize = button.AbsoluteSize
+
+    mousemoveabs(absPos.X + absSize.X/2, absPos.Y + absSize.Y)
+    mouse1click()
 end
 
 function ToggleLobbyRadio()
@@ -2213,6 +2245,13 @@ togglesSection:AddButton({
 
             OrionLib.Flags[flag]:Set(false)
         end
+
+        OrionLib:MakeNotification({
+            Name = "Pillar Chase Panel",
+            Content = "All toggles have been disabled.",
+            Image = "rbxassetid://4483345998",
+            Time = 5
+        })
   	end    
 })
 
