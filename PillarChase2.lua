@@ -3,7 +3,7 @@
 local OrionLib = loadstring(game:HttpGet(('https://raw.githubusercontent.com/shlexware/Orion/main/source')))()
 local Window = OrionLib:MakeWindow({Name = "Pillar Chase Panel", HidePremium = false, Intro = false, IntroText = "SIGMA ™", SaveConfig = true, ConfigFolder = "PC2Config"})
 
-local currentVersion = "2.0.14"
+local currentVersion = "2.0.15"
 
 -- Services
 
@@ -83,13 +83,24 @@ local autoActionCooldown = false
 local fovConnection = nil
 local fullbrightConnection = nil
 
-local AutobuyList = {
+local AutobuyItemList = {
     ["Flashlight"] = false;
     ["First Aid Kit"] = false;
     ["Ultra Flashlight"] = false;
     ["Stephano"] = false;
     ["Doom's Guantlet"] = false;
     ["Weird Mask"] = false;
+}
+
+local AutobuyUpgradeList = {
+    ["Clarity"] = false;
+    ["Flimsy"] = false;
+    ["Prepared"] = false;
+    ["Runner"] = false;
+    ["Sixth Sense"] = false;
+    ["Sneaky"] = false;
+    ["Tanky"] = false;
+    ["Danger Vision"] = false;
 }
 
 local RoleToIcon = {
@@ -1312,7 +1323,7 @@ function AddBorgerSuit()
     end
 end
 
-function AutoBuyItems()
+function AutoBuyStuff()
     while Autobuy_Enabled == true do
         local LobbyGUI = PlayerGui.LobbyGUI
         if not LobbyGUI then return end
@@ -1320,9 +1331,18 @@ function AutoBuyItems()
         local BuyItemEvent = LobbyGUI.ButtonFrames.ITEMSHOP.WorkItemGUI.BuyItem
         if not BuyItemEvent then return end
 
-        for item, buyBool in AutobuyList do
+        local BuyUpgradeEvent = nil -- FIND REMOTE EVENT PATH
+        if not BuyUpgradeEvent then return end
+
+        for item, buyBool in AutobuyItemList do
             if buyBool == true then
                 BuyItemEvent:FireServer(true, item)
+            end
+        end
+
+        for upgrade, buyBool in AutobuyUpgradeList do
+            if buyBool == true then
+                BuyUpgradeEvent:FireServer(true, upgrade)
             end
         end
 
@@ -1385,11 +1405,12 @@ function AutoReset()
             if playerIsSurvivor and humanoid.Health > 0 then
                 autoActionCooldown = true
 
-                task.delay(4, function()
+                task.delay(10, function()
                     KillHumanoid()
                     
-                    task.wait(2)
-                    autoActionCooldown = false
+                    task.delay(5, function()
+                        autoActionCooldown = false
+                    end)
                 end)
             end
         end
@@ -1412,11 +1433,12 @@ function AutoMask()
             if playerIsSurvivor then
                 autoActionCooldown = true
 
-                task.delay(4, function()
+                task.delay(10, function()
                     BecomeZombie()
                     
-                    task.wait(2)
-                    autoActionCooldown = false
+                    task.delay(5, function()
+                        autoActionCooldown = false
+                    end)
                 end)
             end
         end
@@ -2313,7 +2335,7 @@ lobbyOptionSection:AddButton({
 --[----]--
 
 local autobuyToggleSection = autobuyTab:AddSection({
-	Name = "Purchase"
+	Name = "Available"
 })
 
 autobuyToggleSection:AddToggle({
@@ -2324,66 +2346,142 @@ autobuyToggleSection:AddToggle({
         Autobuy_Enabled = Value
 
         if Autobuy_Enabled == true then
-            AutoBuyItems()
+            AutoBuyStuff()
         end
 	end    
 })
 
-local autobuyAvailableSection = autobuyTab:AddSection({
-	Name = "Available"
+local autobuyItemsSection = autobuyTab:AddSection({
+	Name = "Items"
 })
 
-autobuyAvailableSection:AddToggle({
+autobuyItemsSection:AddToggle({
 	Name = "Flashlight",
 	Default = false,
     Flag = "Toggle_AutobuyFlashlight",
 	Callback = function(Value)
-        AutobuyList["Flashlight"] = Value
+        AutobuyItemList["Flashlight"] = Value
 	end    
 })
 
-autobuyAvailableSection:AddToggle({
+autobuyItemsSection:AddToggle({
 	Name = "First Aid Kit",
 	Default = false,
     Flag = "Toggle_AutobuyFirstAidKit",
 	Callback = function(Value)
-        AutobuyList["First Aid Kit"] = Value
+        AutobuyItemList["First Aid Kit"] = Value
 	end    
 })
 
-autobuyAvailableSection:AddToggle({
+autobuyItemsSection:AddToggle({
 	Name = "Ultra Flashlight",
 	Default = false,
     Flag = "Toggle_AutobuyUltraFlashlight",
 	Callback = function(Value)
-        AutobuyList["Ultra Flashlight"] = Value
+        AutobuyItemList["Ultra Flashlight"] = Value
 	end    
 })
 
-autobuyAvailableSection:AddToggle({
+autobuyItemsSection:AddToggle({
 	Name = "Stephano",
 	Default = false,
     Flag = "Toggle_AutobuyStephano",
 	Callback = function(Value)
-        AutobuyList["Stephano"] = Value
+        AutobuyItemList["Stephano"] = Value
 	end    
 })
 
-autobuyAvailableSection:AddToggle({
+autobuyItemsSection:AddToggle({
 	Name = "Doom's Gauntlet",
 	Default = false,
     Flag = "Toggle_AutobuyDoomsGauntlet",
 	Callback = function(Value)
-        AutobuyList["Doom's Gauntlet"] = Value
+        AutobuyItemList["Doom's Gauntlet"] = Value
 	end    
 })
 
-autobuyAvailableSection:AddToggle({
+autobuyItemsSection:AddToggle({
 	Name = "Weird Mask",
 	Default = false,
     Flag = "Toggle_AutobuyWeirdMask",
 	Callback = function(Value)
-        AutobuyList["Weird Mask"] = Value
+        AutobuyItemList["Weird Mask"] = Value
+	end    
+})
+
+local autobuyUpgradesSection = autobuyTab:AddSection({
+	Name = "Upgrades"
+})
+
+autobuyUpgradesSection:AddToggle({
+	Name = "Clarity",
+	Default = false,
+    Flag = "Toggle_AutobuyClarity",
+	Callback = function(Value)
+        AutobuyUpgradeList["Clarity"] = Value
+	end    
+})
+
+autobuyUpgradesSection:AddToggle({
+	Name = "Flimsy",
+	Default = false,
+    Flag = "Toggle_AutobuyFlimsy",
+	Callback = function(Value)
+        AutobuyUpgradeList["Flimsy"] = Value
+	end    
+})
+
+autobuyUpgradesSection:AddToggle({
+	Name = "Prepared",
+	Default = false,
+    Flag = "Toggle_AutobuyPrepared",
+	Callback = function(Value)
+        AutobuyUpgradeList["Prepared"] = Value
+	end    
+})
+
+autobuyUpgradesSection:AddToggle({
+	Name = "Runner",
+	Default = false,
+    Flag = "Toggle_AutobuyRunner",
+	Callback = function(Value)
+        AutobuyUpgradeList["Runner"] = Value
+	end    
+})
+
+autobuyUpgradesSection:AddToggle({
+	Name = "Sixth Sense",
+	Default = false,
+    Flag = "Toggle_AutobuySixthSense",
+	Callback = function(Value)
+        AutobuyUpgradeList["Sixth Sense"] = Value
+	end    
+})
+
+autobuyUpgradesSection:AddToggle({
+	Name = "Sneaky",
+	Default = false,
+    Flag = "Toggle_AutobuySneaky",
+	Callback = function(Value)
+        AutobuyUpgradeList["Sneaky"] = Value
+	end    
+})
+
+autobuyUpgradesSection:AddToggle({
+	Name = "Tanky",
+	Default = false,
+    Flag = "Toggle_AutobuyTanky",
+	Callback = function(Value)
+        AutobuyUpgradeList["Tanky"] = Value
+	end    
+})
+
+autobuyUpgradesSection:AddToggle({
+	Name = "Danger Vision",
+	Default = false,
+    Flag = "Toggle_AutobuyDangerVision",
+	Callback = function(Value)
+        AutobuyUpgradeList["Danger Vision"] = Value
 	end    
 })
 
