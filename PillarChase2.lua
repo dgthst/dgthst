@@ -3,7 +3,7 @@
 local OrionLib = loadstring(game:HttpGet(('https://raw.githubusercontent.com/shlexware/Orion/main/source')))()
 local Window = OrionLib:MakeWindow({Name = "Pillar Chase Panel", HidePremium = false, Intro = false, IntroText = "SIGMA ™", SaveConfig = true, ConfigFolder = "PC2Config"})
 
-local currentVersion = "2.0.16"
+local currentVersion = "2.0.17"
 
 -- Services
 
@@ -118,22 +118,66 @@ local RoleToIcon = {
     };
 }
 
-local ItemToMaxStats = {
-    ["Stephano"] = {
-        ["Time"] = nil;
-        ["Light"] = 100;
-    };
+local ItemToInfo = {
     ["Flashlight"] = {
-        ["Time"] = 155;
-        ["Light"] = 100;
+        ["Stats"] = {
+            ["Time"] = 155;
+            ["Light"] = 100;
+        };
+        ["Icon"] = {
+            ["Image"] = 111402622249168;
+            ["Color"] = Color3.fromRGB(255, 255, 0);
+        };
+    };
+    ["First Aid Kit"] = {
+        ["Stats"] = {
+            ["Time"] = nil;
+            ["Light"] = nil;
+        };
+        ["Icon"] = {
+            ["Image"] = 103069522996537;
+            ["Color"] = Color3.fromRGB(220, 0, 0)
+        };
     };
     ["Ultra Flashlight"] = {
-        ["Time"] = 200;
-        ["Light"] = 125;
+        ["Stats"] = {
+            ["Time"] = 200;
+            ["Light"] = 125;
+        };
+        ["Icon"] = {
+            ["Image"] = 114276243299890;
+            ["Color"] = Color3.fromRGB(255, 255, 0);
+        };
+    };
+    ["Stephano"] = {
+        ["Stats"] = {
+            ["Time"] = nil;
+            ["Light"] = 100;
+        };
+        ["Icon"] = {
+            ["Image"] = 72292481648056;
+            ["Color"] = Color3.fromRGB(255, 170, 0)
+        };
     };
     ["Doom's Gauntlet"] = {
-        ["Time"] = nil;
-        ["Light"] = 0;
+        ["Stats"] = {
+            ["Time"] = nil;
+            ["Light"] = 0;
+        };
+        ["Icon"] = {
+            ["Image"] = 126272608755316;
+            ["Color"] = Color3.fromRGB(220, 220, 0)
+        };
+    };
+    ["Weird Mask"] = {
+        ["Stats"] = {
+            ["Time"] = nil;
+            ["Light"] = nil;
+        };
+        ["Icon"] = {
+            ["Image"] = 80577735371630;
+            ["Color"] = Color3.fromRGB(255, 255, 255);
+        };
     };
 }
 
@@ -323,15 +367,19 @@ function AddItemESP(itemModel)
         CreateESPHighlight(itemModel, Color_Item)
     end
 
+    local isModel = itemModel:IsA("Model")
+    local mainPart = itemModel
+
+    if isModel then
+        mainPart = itemModel.PrimaryPart
+    end
+
     if ESP_ShowName == true then
-        local isModel = itemModel:IsA("Model")
-        local mainPart = itemModel
-
-        if isModel then
-            mainPart = itemModel.PrimaryPart
-        end
-
         AddPartLabel(mainPart, itemModel.Name)
+    end
+
+    if ESP_ShowIcon == true then
+        AddImageLabel(mainPart, ItemToInfo[itemModel.Name]["Icon"].Color, ItemToInfo[itemModel.Name]["Icon"].Image, 2.5)
     end
 end
 
@@ -349,7 +397,7 @@ function AddObjectiveESP(objectiveInstance, objectiveName)
     end
 
     if ESP_ShowIcon == true then
-        AddImageLabel(objectiveInstance, Color3.fromRGB(255, 255, 255), 12011030159, 3.5)
+        AddImageLabel(objectiveInstance, Color3.fromRGB(255, 255, 255), 114600781633322, 3.5)
     end
 end
 
@@ -951,6 +999,12 @@ function UpdateAntiDebris()
             bloodUI.Visible = false
         end
 
+        local vineUI = gameGui:FindFirstChild("VineUI")
+        if vineUI then
+            vineUI.Transparency = 0
+            vineUI.Visible = false
+        end
+
         local debuffsFrame = gameGui:FindFirstChild("Debuffs")
         if debuffsFrame then
             for _, child in debuffsFrame:GetChildren() do
@@ -1249,7 +1303,7 @@ function InfiniteStephano()
     local foundItem = inventory:FindFirstChild("Stephano")
     if not foundItem then return end
 
-    for possibleStat, statValue in pairs(ItemToMaxStats["Stephano"]) do
+    for possibleStat, statValue in pairs(ItemToInfo["Stats"]["Stephano"]) do
         if statValue ~= nil then
             foundItem[possibleStat].Value = statValue
         end
@@ -1264,7 +1318,7 @@ function InfiniteFlashlight()
         local itemName = foundItem.Name:lower()
         if not itemName:find("flashlight") then continue end
 
-        for possibleStat, statValue in pairs(ItemToMaxStats[foundItem.Name]) do
+        for possibleStat, statValue in pairs(ItemToInfo["Stats"][foundItem.Name]) do
             if statValue ~= nil then
                 foundItem[possibleStat].Value = statValue
             end
@@ -1279,7 +1333,7 @@ function InfiniteGauntlet()
     local foundItem = inventory:FindFirstChild("Doom's Gauntlet")
     if not foundItem then return end
 
-    for possibleStat, statValue in pairs(ItemToMaxStats["Doom's Gauntlet"]) do
+    for possibleStat, statValue in pairs(ItemToInfo["Stats"]["Doom's Gauntlet"]) do
         if statValue ~= nil then
             foundItem[possibleStat].Value = statValue
         end
@@ -2470,6 +2524,7 @@ local updatesSection = changelogTab:AddSection({
 	Name = "Updates"
 })
 
+updatesSection:AddParagraph(`- Better ESP, more features`,"Added (2.0.17)")
 updatesSection:AddParagraph(`- Better FPS handling, more features`,"Added (2.0.9)")
 updatesSection:AddParagraph(`- Fixed Autobuy, Better farming, +bugs`,"Added (2.0.8)")
 updatesSection:AddParagraph(`- Updated Farm, +bugs`,"Added (2.0.7)")
