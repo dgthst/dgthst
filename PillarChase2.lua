@@ -3,7 +3,7 @@
 local OrionLib = loadstring(game:HttpGet(('https://raw.githubusercontent.com/shlexware/Orion/main/source')))()
 local Window = OrionLib:MakeWindow({Name = "Pillar Chase Panel", HidePremium = false, Intro = false, IntroText = "SIGMA ™", SaveConfig = true, ConfigFolder = "PC2Config"})
 
-local currentVersion = "2.0.9"
+local currentVersion = "2.0.10"
 
 -- Services
 
@@ -2119,7 +2119,7 @@ afkGameplaySection:AddToggle({
         Farm_AutoReset = Value
 
         if Farm_AutoReset == true then
-            OrionLib.Flags["Farm_AutoMask"]:Set(false)
+            OrionLib.Flags["Toggle_FarmAutoMask"]:Set(false)
         end
 	end    
 })
@@ -2132,7 +2132,7 @@ afkGameplaySection:AddToggle({
         Farm_AutoMask = Value
 
         if Farm_AutoMask == true then
-            OrionLib.Flags["Farm_AutoReset"]:Set(false)
+            OrionLib.Flags["Toggle_FarmAutoReset"]:Set(false)
         end
 	end    
 })
