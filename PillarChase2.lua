@@ -864,7 +864,7 @@ function GetCurrentAbilities()
             if doorBank then
                 for _, realDoor in doorBank:GetChildren() do
                     if realDoor.DoorPrompt.Enabled == true then
-                        realDoor.Name = "Escape"
+                        realDoor.Name = "[ESCAPE]"
                         table.insert(abilityTable, realDoor)
                     end
                 end 
@@ -1090,7 +1090,6 @@ function KickMessageFound()
 
                 local textContents = textLabel.Text:lower()
                 if textContents:find("kicked") then
-                    print("Found")
                     return true
                 end
             end
