@@ -3,7 +3,7 @@
 local OrionLib = loadstring(game:HttpGet(('https://raw.githubusercontent.com/shlexware/Orion/main/source')))()
 local Window = OrionLib:MakeWindow({Name = "Pillar Chase Panel", HidePremium = false, Intro = false, IntroText = "SIGMA ™", SaveConfig = true, ConfigFolder = "PC2Config"})
 
-local currentVersion = "2.0.17"
+local currentVersion = "2.0.18"
 
 -- Services
 
@@ -379,7 +379,7 @@ function AddItemESP(itemModel)
     end
 
     if ESP_ShowIcon == true then
-        AddImageLabel(mainPart, ItemToInfo[itemModel.Name]["Icon"].Color, ItemToInfo[itemModel.Name]["Icon"].Image, 2.5)
+        AddImageLabel(mainPart, ItemToInfo[itemModel.Name]["Icon"].Color, ItemToInfo[itemModel.Name]["Icon"].Image, 3.5)
     end
 end
 
@@ -1303,7 +1303,7 @@ function InfiniteStephano()
     local foundItem = inventory:FindFirstChild("Stephano")
     if not foundItem then return end
 
-    for possibleStat, statValue in pairs(ItemToInfo["Stats"]["Stephano"]) do
+    for possibleStat, statValue in pairs(ItemToInfo["Stephano"]["Stats"]) do
         if statValue ~= nil then
             foundItem[possibleStat].Value = statValue
         end
@@ -1314,14 +1314,26 @@ function InfiniteFlashlight()
     local inventory = GetPlayerInventory()
     if not inventory then return end
 
-    for _, foundItem in inventory:GetChildren() do
-        local itemName = foundItem.Name:lower()
-        if not itemName:find("flashlight") then continue end
+    local foundItem = inventory:FindFirstChild("Flashlight")
+    if not foundItem then return end
 
-        for possibleStat, statValue in pairs(ItemToInfo["Stats"][foundItem.Name]) do
-            if statValue ~= nil then
-                foundItem[possibleStat].Value = statValue
-            end
+    for possibleStat, statValue in pairs(ItemToInfo["Flashlight"]["Stats"]) do
+        if statValue ~= nil then
+            foundItem[possibleStat].Value = statValue
+        end
+    end
+end
+
+function InfiniteUltraFlashlight()
+    local inventory = GetPlayerInventory()
+    if not inventory then return end
+
+    local foundItem = inventory:FindFirstChild("Ultra Flashlight")
+    if not foundItem then return end
+
+    for possibleStat, statValue in pairs(ItemToInfo["Ultra Flashlight"]["Stats"]) do
+        if statValue ~= nil then
+            foundItem[possibleStat].Value = statValue
         end
     end
 end
@@ -1333,7 +1345,7 @@ function InfiniteGauntlet()
     local foundItem = inventory:FindFirstChild("Doom's Gauntlet")
     if not foundItem then return end
 
-    for possibleStat, statValue in pairs(ItemToInfo["Stats"]["Doom's Gauntlet"]) do
+    for possibleStat, statValue in pairs(ItemToInfo["Doom's Gauntlet"]["Stats"]) do
         if statValue ~= nil then
             foundItem[possibleStat].Value = statValue
         end
@@ -1364,7 +1376,7 @@ function AutoBuyStuff()
         local BuyItemEvent = LobbyGUI.ButtonFrames.ITEMSHOP.WorkItemGUI.BuyItem
         if not BuyItemEvent then return end
 
-        local BuyUpgradeEvent = nil -- FIND REMOTE EVENT PATH
+        local BuyUpgradeEvent = LobbyGUI.WorkSHOP.BuyItem
         if not BuyUpgradeEvent then return end
 
         for item, buyBool in AutobuyItemList do
@@ -1375,7 +1387,10 @@ function AutoBuyStuff()
 
         for upgrade, buyBool in AutobuyUpgradeList do
             if buyBool == true then
-                BuyUpgradeEvent:FireServer(true, upgrade)
+                local alreadyHasUpgrade = localPlayer.Upgrades:FindFirstChild(upgrade)
+                if alreadyHasUpgrade then continue end
+
+                BuyUpgradeEvent:FireServer(LobbyGUI.WorkSHOP.Upgrades[upgrade], 0, upgrade)
             end
         end
 
@@ -1881,8 +1896,10 @@ itemUsageSection:AddToggle({
 
         if Item_InfiniteFlashlight == true then
             RunService:BindToRenderStep("InfiniteFlashlight", Enum.RenderPriority.Last.Value, InfiniteFlashlight)
+            RunService:BindToRenderStep("InfiniteUltraFlashlight", Enum.RenderPriority.Last.Value, InfiniteUltraFlashlight)
         else
             RunService:UnbindFromRenderStep("InfiniteFlashlight")
+            RunService:UnbindFromRenderStep("InfiniteUltraFlashlight")
         end
 	end    
 })
@@ -2524,6 +2541,7 @@ local updatesSection = changelogTab:AddSection({
 	Name = "Updates"
 })
 
+updatesSection:AddParagraph(`- Added Auto Upgrades`,"Added (2.0.18)")
 updatesSection:AddParagraph(`- Better ESP, more features`,"Added (2.0.17)")
 updatesSection:AddParagraph(`- Better FPS handling, more features`,"Added (2.0.9)")
 updatesSection:AddParagraph(`- Fixed Autobuy, Better farming, +bugs`,"Added (2.0.8)")
