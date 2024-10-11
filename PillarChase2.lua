@@ -3,7 +3,7 @@
 local OrionLib = loadstring(game:HttpGet(('https://raw.githubusercontent.com/shlexware/Orion/main/source')))()
 local Window = OrionLib:MakeWindow({Name = "Pillar Chase Panel", HidePremium = false, Intro = false, IntroText = "SIGMA ™", SaveConfig = true, ConfigFolder = "PC2Config"})
 
-local currentVersion = "2.0.8"
+local currentVersion = "2.0.9"
 
 -- Services
 
@@ -2368,6 +2368,7 @@ local updatesSection = changelogTab:AddSection({
 	Name = "Updates"
 })
 
+updatesSection:AddParagraph(`- Better FPS handling, more features`,"Added (2.0.9")
 updatesSection:AddParagraph(`- Fixed Autobuy, Better farming, +bugs`,"Added (2.0.8)")
 updatesSection:AddParagraph(`- Updated Farm, +bugs`,"Added (2.0.7)")
 updatesSection:AddParagraph(`- Added FOV, +bugs`,"Added (2.0.6)")
