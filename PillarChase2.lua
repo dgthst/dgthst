@@ -3,7 +3,7 @@
 local OrionLib = loadstring(game:HttpGet(('https://raw.githubusercontent.com/shlexware/Orion/main/source')))()
 local Window = OrionLib:MakeWindow({Name = "Pillar Chase Panel", HidePremium = false, Intro = false, IntroText = "SIGMA ™", SaveConfig = true, ConfigFolder = "PC2Config"})
 
-local currentVersion = "2.0.11"
+local currentVersion = "2.0.12"
 
 -- Services
 
@@ -1380,10 +1380,10 @@ function AutoReset()
                 autoActionCooldown = false
             end)
 
-            local character = player.Character
+            local character = localPlayer.Character
             if not character then continue end
     
-            local humanoid = player:FindFirstChildWhichIsA("Humanoid")
+            local humanoid = character:FindFirstChildWhichIsA("Humanoid")
             if not humanoid then continue end 
             
             local playerIsSurvivor = character:FindFirstChild("Alive")
@@ -1406,10 +1406,10 @@ function AutoMask()
                 autoActionCooldown = false
             end)
             
-            local character = player.Character
+            local character = localPlayer.Character
             if not character then continue end
     
-            local humanoid = player:FindFirstChildWhichIsA("Humanoid")
+            local humanoid = character:FindFirstChildWhichIsA("Humanoid")
             if not humanoid then continue end 
             
             local playerIsSurvivor = character:FindFirstChild("Alive")
