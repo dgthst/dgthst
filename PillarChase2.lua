@@ -3,7 +3,7 @@
 local OrionLib = loadstring(game:HttpGet(('https://raw.githubusercontent.com/shlexware/Orion/main/source')))()
 local Window = OrionLib:MakeWindow({Name = "Pillar Chase Panel", HidePremium = false, Intro = false, IntroText = "SIGMA ™", SaveConfig = true, ConfigFolder = "PC2Config"})
 
-local currentVersion = "2.0.18"
+local currentVersion = "2.0.19"
 
 -- Services
 
@@ -79,6 +79,7 @@ local Autobuy_Enabled = false
 
 local refreshingESP = false
 local autoActionCooldown = false
+local buyUpgradeCooldown = false
 
 local fovConnection = nil
 local fullbrightConnection = nil
@@ -458,7 +459,7 @@ function AddHealthLabel(character)
     newTextLabel.TextScaled = true
     newTextLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
     newTextLabel.Font = Enum.Font.Montserrat.Value
-    newTextLabel.Text = `❤️ {math.round(currentHealth.Value)}`
+    newTextLabel.Text = `🤍 {math.round(currentHealth.Value)}`
     newTextLabel.Parent = newHealth
 
     local newStroke = Instance.new("UIStroke")
@@ -1390,7 +1391,15 @@ function AutoBuyStuff()
                 local alreadyHasUpgrade = localPlayer.Upgrades:FindFirstChild(upgrade)
                 if alreadyHasUpgrade then continue end
 
-                BuyUpgradeEvent:FireServer(LobbyGUI.WorkSHOP.Upgrades[upgrade], 0, upgrade)
+                if not buyUpgradeCooldown then
+                    buyUpgradeCooldown = true
+                    
+                    BuyUpgradeEvent:FireServer(LobbyGUI.WorkSHOP.Upgrades[upgrade], 0, upgrade)
+
+                    task.delay(1.5, function()
+                        buyUpgradeCooldown = false
+                    end)
+                end
             end
         end
 
