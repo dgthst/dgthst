@@ -3,7 +3,7 @@
 local OrionLib = loadstring(game:HttpGet(('https://raw.githubusercontent.com/shlexware/Orion/main/source')))()
 local Window = OrionLib:MakeWindow({Name = "Pillar Chase Panel", HidePremium = false, Intro = false, IntroText = "SIGMA ™", SaveConfig = true, ConfigFolder = "PC2Config"})
 
-local currentVersion = "2.0.10"
+local currentVersion = "2.0.11"
 
 -- Services
 
@@ -2119,6 +2119,8 @@ afkGameplaySection:AddToggle({
         Farm_AutoReset = Value
 
         if Farm_AutoReset == true then
+            AutoReset()
+            
             OrionLib.Flags["Toggle_FarmAutoMask"]:Set(false)
         end
 	end    
@@ -2132,6 +2134,8 @@ afkGameplaySection:AddToggle({
         Farm_AutoMask = Value
 
         if Farm_AutoMask == true then
+            AutoMask()
+
             OrionLib.Flags["Toggle_FarmAutoReset"]:Set(false)
         end
 	end    
@@ -2407,7 +2411,7 @@ local updatesSection = changelogTab:AddSection({
 	Name = "Updates"
 })
 
-updatesSection:AddParagraph(`- Better FPS handling, more features`,"Added (2.0.9")
+updatesSection:AddParagraph(`- Better FPS handling, more features`,"Added (2.0.9)")
 updatesSection:AddParagraph(`- Fixed Autobuy, Better farming, +bugs`,"Added (2.0.8)")
 updatesSection:AddParagraph(`- Updated Farm, +bugs`,"Added (2.0.7)")
 updatesSection:AddParagraph(`- Added FOV, +bugs`,"Added (2.0.6)")
