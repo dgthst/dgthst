@@ -3,7 +3,7 @@
 local OrionLib = loadstring(game:HttpGet(('https://raw.githubusercontent.com/shlexware/Orion/main/source')))()
 local Window = OrionLib:MakeWindow({Name = "Pillar Chase Panel", HidePremium = false, Intro = false, IntroText = "SIGMA ™", SaveConfig = true, ConfigFolder = "PC2Config"})
 
-local currentVersion = "2.0.15"
+local currentVersion = "2.0.16"
 
 -- Services
 
@@ -947,7 +947,8 @@ function UpdateAntiDebris()
 
         local bloodUI = gameGui:FindFirstChild("BloodUI")
         if bloodUI then
-            --bloodUI:Destroy()
+            bloodUI.Transparency = 0
+            bloodUI.Visible = false
         end
 
         local debuffsFrame = gameGui:FindFirstChild("Debuffs")
@@ -1065,29 +1066,7 @@ function AutoSolveBaldi()
     local thinkpadUI = gameGui:FindFirstChild("ThinkPad")
     if not thinkpadUI then return end
 
-    local mathQuestion = thinkpadUI.Question.Text
-    local newQuestion = mathQuestion:gsub("=", "")
-    local foundPlus = string.find(newQuestion, "+")
-
-    local answerNumber
-    
-    if foundPlus then
-        local splitEquation = newQuestion:split("+")
-        answerNumber = splitEquation[1] + splitEquation[2]
-    else
-        local splitEquation = newQuestion:split("-")
-        answerNumber = splitEquation[1] - splitEquation[2]
-    end
-    
-    thinkpadUI.TextBox.Text = answerNumber
-
-    local enterButton = thinkpadUI.Enter
-
-    local absPos = button.AbsolutePosition
-    local absSize = button.AbsoluteSize
-
-    mousemoveabs(absPos.X + absSize.X/2, absPos.Y + absSize.Y)
-    mouse1click()
+    thinkpadUI:Destroy()
 end
 
 function ToggleLobbyRadio()
@@ -1735,24 +1714,6 @@ playerStatusSection:AddToggle({
             RunService:UnbindFromRenderStep("StaminaConservation")
         end
 	end    
-})
-
-local itemSpecialSection = playerTab:AddSection({
-	Name = "Special"
-})
-
-itemSpecialSection:AddButton({
-	Name = "Godmode Anchor",
-	Callback = function()
-        StartGodmodeAnchor()
-
-        OrionLib:MakeNotification({
-            Name = "Server Side",
-            Content = "Your position has been locked in place.",
-            Image = "rbxassetid://17889070713",
-            Time = 5
-        })
-  	end    
 })
 
 --[----]--
