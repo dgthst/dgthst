@@ -3,7 +3,7 @@
 local OrionLib = loadstring(game:HttpGet(('https://raw.githubusercontent.com/shlexware/Orion/main/source')))()
 local Window = OrionLib:MakeWindow({Name = "Pillar Chase Panel", HidePremium = false, Intro = false, IntroText = "SIGMA ™", SaveConfig = true, ConfigFolder = "PC2Config"})
 
-local currentVersion = "2.0.19"
+local currentVersion = "2.0.20"
 
 -- Services
 
@@ -12,6 +12,7 @@ local Lighting = game:GetService("Lighting")
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
+local LogService = game:GetService("LogService")
 
 -- Variables
 
@@ -77,12 +78,19 @@ local Lobby_AutoPlayFNF = false
 
 local Autobuy_Enabled = false
 
+local Debug_ListenForAttack = false
+local Debug_SpamLeftClick = false
+
 local refreshingESP = false
 local autoActionCooldown = false
 local buyUpgradeCooldown = false
+local cooldownViewCooldown = false
 
 local fovConnection = nil
 local fullbrightConnection = nil
+local listenForAttackConnection = nil
+
+local lastAttackTime = nil
 
 local AutobuyItemList = {
     ["Flashlight"] = false;
@@ -179,6 +187,12 @@ local ItemToInfo = {
             ["Image"] = 80577735371630;
             ["Color"] = Color3.fromRGB(255, 255, 255);
         };
+    };
+}
+
+local MonsterToInfo = {
+    ["Zombie"] = {
+        ["Cooldown"] = 2.475;
     };
 }
 
@@ -601,6 +615,27 @@ function UpdateCooldownUI(createUI)
 	end
 end
 
+function WatchForCooldown()
+    if cooldownViewCooldown == false then
+
+        local character = localPlayer.Character
+        if not character then return end
+    
+        local playerIsKiller = character:FindFirstChild("MonsterNameValue")
+    
+        if playerIsKiller then
+            if playerIsKiller.Value == "Zombie" then
+                if character.HumanoidRootPart.Attack.IsPlaying == true then
+                    cooldownViewCooldown = true
+                    CreateCooldown(2.5)
+                end
+            else
+                
+            end
+        end
+    end
+end
+
 function UpdatePopupUI(createUI)
 	local newUI = PlayerGui:FindFirstChild("Popups")
 	
@@ -659,6 +694,25 @@ function CreateCooldown(cooldownTime)
 	cooldownFrame.Size = UDim2.new(1, 0, 1, 0)
 	cooldownFrame.Parent = cooldownUI
 
+    local titleLabel = Instance.new("TextLabel")
+	titleLabel.BackgroundTransparency = 1
+	titleLabel.AnchorPoint = Vector2.new(0.5, 0.5)
+	titleLabel.Position = UDim2.new(0.5, 0, 0.56, 0)
+	titleLabel.Size = UDim2.new(0.12, 0, 0.1, 0)
+    titleLabel.TextScaled = true
+	titleLabel.Font = Enum.Font.MontserratMedium
+    titleLabel.Text = "[ Attack Cooldown ]"
+    titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+	titleLabel.Parent = cooldownFrame
+
+    local titleUIRatio = Instance.new("UIAspectRatioConstraint")
+	titleUIRatio.AspectRatio = 12
+	titleUIRatio.Parent = titleLabel
+
+    local titleStroke = Instance.new("UIStroke")
+	titleStroke.Thickness = 1
+	titleStroke.Parent = titleLabel
+
 	local canvasGroup = Instance.new("CanvasGroup")
 	canvasGroup.AnchorPoint = Vector2.new(0.5, 0.5)
 	canvasGroup.Position = UDim2.new(0.5, 0, 0.58, 0)
@@ -696,6 +750,7 @@ function CreateCooldown(cooldownTime)
 	decreaseTween.Completed:Connect(function()
 		cooldownFrame:Destroy()
 		UpdateCooldownUI()
+        cooldownViewCooldown = false
 	end)
 end
 
@@ -1524,6 +1579,57 @@ function ConserveStamina()
     end
 end
 
+function UpdateDebugUI(createUI)
+	local newUI = PlayerGui:FindFirstChild("DebugOutput")
+
+	if createUI then
+        if not newUI then
+            newUI = Instance.new("ScreenGui")
+            newUI.Name = "DebugOutput"
+            newUI.DisplayOrder = 2500000
+            newUI.IgnoreGuiInset = true
+            newUI.ResetOnSpawn = false
+            newUI.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+            newUI.Parent = PlayerGui
+        end
+
+		return newUI
+	end
+end
+
+function GetDateTime()
+	return DateTime.now().UnixTimestampMillis/1000
+end
+
+function ListenForAttack(messageOutput, messageType)
+    if messageOutput == "Attempt to attack!" then
+        local outputUI = UpdateDebugUI(true)
+
+        if lastAttackTime then
+            local outputLabel = Instance.new("TextLabel")
+            outputLabel.BackgroundTransparency = 1
+            outputLabel.AnchorPoint = Vector2.new(0.5, 0.5)
+            outputLabel.Position = UDim2.new(0.5, 0, 0.3, 0)
+            outputLabel.Size = UDim2.new(1, 0, 0.04, 0)
+            outputLabel.TextScaled = true
+            outputLabel.Font = Enum.Font.Montserrat
+            outputLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+            outputLabel.Parent = outputUI
+
+            local debugText = `[AT]: {math.round((GetDateTime() - lastAttackTime)*1000)/1000}`
+            outputLabel.Text = debugText
+
+            task.delay(3, function()
+                if outputLabel.Text == debugText then
+                    outputLabel:Destroy()
+                end
+            end)
+        end
+        
+        lastAttackTime = GetDateTime()
+    end
+end
+
 -- Tabs
 
 local mainTab = Window:MakeTab({
@@ -1606,6 +1712,12 @@ local helpTab = Window:MakeTab({
 
 local changelogTab = Window:MakeTab({
 	Name = "Changelog",
+	Icon = "rbxassetid://4483345998",
+	PremiumOnly = false
+})
+
+local debugTab = Window:MakeTab({
+	Name = "Debug",
 	Icon = "rbxassetid://4483345998",
 	PremiumOnly = false
 })
@@ -1983,7 +2095,11 @@ actionSection:AddToggle({
 	Callback = function(Value)
         Notification_AttackCooldown = Value
 
-        WorkInProgressNotification(Value)
+        if Notification_AttackCooldown == true then
+            RunService:BindToRenderStep("WatchForCooldown", Enum.RenderPriority.Last.Value, WatchForCooldown)
+        else
+            RunService:UnbindFromRenderStep("WatchForCooldown")
+        end
 	end    
 })
 
@@ -2542,6 +2658,47 @@ local contactSection = helpTab:AddSection({
 })
 
 contactSection:AddParagraph("If something stops working, check F9 console for errors.","Take a screenshot of any errors and send them to me.")
+
+--[----]--
+
+local debugWarningSection = debugTab:AddSection({
+	Name = "Warning"
+})
+
+debugWarningSection:AddParagraph(`Don't touch anything if you don't know what you're doing`,"All features are subject to change.")
+
+local debugfeaturesSection = debugTab:AddSection({
+	Name = "Features"
+})
+
+debugfeaturesSection:AddToggle({
+	Name = "Listen For Attack",
+	Default = false,
+	Callback = function(Value)
+        Debug_ListenForAttack = Value
+
+        if Debug_ListenForAttack == true then
+            listenForAttackConnection = LogService.MessageOut:Connect(ListenForAttack)
+        elseif listenForAttackConnection then
+            listenForAttackConnection:Disconnect()
+            listenForAttackConnection = nil
+        end
+	end    
+})
+
+debugfeaturesSection:AddToggle({
+	Name = "Spam M1",
+	Default = false,
+	Callback = function(Value)
+        Debug_SpamLeftClick = Value
+
+        if Debug_SpamLeftClick == true then
+            RunService:BindToRenderStep("SpamLeftClick", Enum.RenderPriority.First.Value, mouse1click)
+        else
+            RunService:UnbindFromRenderStep("SpamLeftClick")
+        end
+	end    
+})
 
 --[----]--
 
