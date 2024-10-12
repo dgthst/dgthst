@@ -3,7 +3,7 @@
 local OrionLib = loadstring(game:HttpGet(('https://raw.githubusercontent.com/shlexware/Orion/main/source')))()
 local Window = OrionLib:MakeWindow({Name = "Pillar Chase Panel", HidePremium = false, Intro = false, IntroText = "SIGMA ™", SaveConfig = true, ConfigFolder = "PC2Config"})
 
-local currentVersion = "2.0.21"
+local currentVersion = "2.0.22"
 
 -- Services
 
@@ -57,6 +57,8 @@ local Graphic_BorgerSuit = false
 local Graphic_ThirdPerson = false
 local Graphic_FOVEnabled = false
 local Graphic_FOVNumber = nil
+local Graphic_XRayEnabled = false
+local Graphic_XRayTransparency = nil
 
 local Interaction_IncreasedRange = false
 local Interaction_InstantComplete = false
@@ -93,6 +95,7 @@ local fullbrightConnection = nil
 local listenForAttackConnection = nil
 
 local lastAttackTime = nil
+local dexExplorerLaunched = false
 
 local AutobuyItemList = {
     ["Flashlight"] = false;
@@ -200,43 +203,43 @@ local MonsterToInfo = {
         ["Cooldown"] = 2.175;
     };
     ["Rosemary"] = {
-        ["Cooldown"] = 1; -- PLACEHOLDER
+        ["Cooldown"] = 0.1; -- PLACEHOLDER
     };
     ["Ao Oni"] = {
-        ["Cooldown"] = 1; -- PLACEHOLDER
+        ["Cooldown"] = 0.1; -- PLACEHOLDER
     };
     ["The Fogborn"] = {
         ["Cooldown"] = 1.545;
     };
     ["EXE"] = {
-        ["Cooldown"] = 1; -- PLACEHOLDER
+        ["Cooldown"] = 0.1; -- PLACEHOLDER
     };
     ["Baldi"] = {
-        ["Cooldown"] = 1; -- PLACEHOLDER
+        ["Cooldown"] = 0.1; -- PLACEHOLDER
     };
     ["Uncle Samsonite"] = {
-        ["Cooldown"] = 1; -- PLACEHOLDER
+        ["Cooldown"] = 0.1; -- PLACEHOLDER
     };
     ["Springtrap"] = {
-        ["Cooldown"] = 1; -- PLACEHOLDER
+        ["Cooldown"] = 0.1; -- PLACEHOLDER
     };
     ["MX"] = {
-        ["Cooldown"] = 1; -- PLACEHOLDER
+        ["Cooldown"] = 3
     };
     ["The Forest King"] = {
-        ["Cooldown"] = 1; -- PLACEHOLDER
+        ["Cooldown"] = 0.1; -- PLACEHOLDER
     };
     ["WYST"] = {
-        ["Cooldown"] = 1; -- PLACEHOLDER
+        ["Cooldown"] = 0.1; -- PLACEHOLDER
     };
     ["Niloticus"] = {
-        ["Cooldown"] = 1; -- PLACEHOLDER
+        ["Cooldown"] = 0.1; -- PLACEHOLDER
     };
     ["Vita Mimic"] = {
-        ["Cooldown"] = 1; -- PLACEHOLDER
+        ["Cooldown"] = 0.1; -- PLACEHOLDER
     };
     ["Fuwatti"] = {
-        ["Cooldown"] = 1; -- PLACEHOLDER
+        ["Cooldown"] = 0.1; -- PLACEHOLDER
     };
 }
 
@@ -408,9 +411,11 @@ function AddPlayerESP(player, character, espColor, roleType)
 
     if ESP_ShowIcon then
         local imageLabel = AddImageLabel(character.PrimaryPart, RoleToIcon[roleType].Color, RoleToIcon[roleType].Image, 0)
+        
         if localPlayer:IsFriendsWith(player.UserId) then
             AddFriendLabel(imageLabel)
         end
+        
         if roleType == "Survivor" then
             AddStatusLabel(character, imageLabel)
         end
@@ -594,8 +599,7 @@ function AddDistanceLabel(character)
     local newDistance = Instance.new("BillboardGui")
     newDistance.Name = "espDistance"
     newDistance.Size = UDim2.new(5,0,2,0)
-
-    newDistance.StudsOffset = Vector3.new(0,0.5,0)
+    newDistance.StudsOffset = Vector3.new(3.5,0.5,0)
     newDistance.AlwaysOnTop = true
     newDistance.Parent = character.PrimaryPart
 
@@ -668,13 +672,16 @@ function WatchForCooldown()
         local playerIsKiller = character:FindFirstChild("MonsterNameValue")
     
         if playerIsKiller then
-            if playerIsKiller.Value == "Zombie" then
-                if character.HumanoidRootPart.Attack.IsPlaying == true then
+            for _, attackSound in character.HumanoidRootPart:GetChildren() do
+                if not attackSound:IsA("Sound") then continue end
+
+                local lowercaseName = attackSound.Name:lower()
+                if not lowercaseName:find("attack") then continue end
+
+                if attackSound.IsPlaying == true and cooldownViewCooldown == false then
                     cooldownViewCooldown = true
-                    CreateCooldown(2.5)
+                    CreateCooldown(MonsterToInfo[playerIsKiller.Value].Cooldown)
                 end
-            else
-                
             end
         end
     end
@@ -745,7 +752,7 @@ function CreateCooldown(cooldownTime)
 	titleLabel.Size = UDim2.new(0.12, 0, 0.1, 0)
     titleLabel.TextScaled = true
 	titleLabel.Font = Enum.Font.MontserratMedium
-    titleLabel.Text = "[ Attack Cooldown ]"
+    titleLabel.Text = "[ M1 Cooldown ]"
     titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 	titleLabel.Parent = cooldownFrame
 
@@ -1219,7 +1226,26 @@ function AutoSolveBaldi()
     local thinkpadUI = gameGui:FindFirstChild("ThinkPad")
     if not thinkpadUI then return end
 
-    thinkpadUI:Destroy()
+    local mathQuestion = thinkpadUI.Question.Text
+    local newQuestion = mathQuestion:gsub("=", "")
+    local foundPlus = string.find(newQuestion, "+")
+
+    local answerNumber
+
+    if foundPlus then
+        local splitEquation = newQuestion:split("+")
+        answerNumber = splitEquation[1] + splitEquation[2]
+    else
+        local splitEquation = newQuestion:split("-")
+        answerNumber = splitEquation[1] - splitEquation[2]
+    end
+
+    thinkpadUI.TextBox.Text = answerNumber
+
+    local enterButton = thinkpadUI.Enter
+
+    local absPos = enterButton.AbsolutePosition
+    local absSize = enterButton.AbsoluteSize
 end
 
 function ToggleLobbyRadio()
@@ -1717,6 +1743,53 @@ function InstantBreakVapor()
         end
 
         task.wait(0.05)
+    end
+end
+
+function IsPartOfCharacter(BasePart)
+    local character = BasePart:FindFirstAncestorOfClass("Model")
+    if not character then return end
+
+    if Players:GetPlayerFromCharacter(character) then
+        return true
+    end
+
+    return false
+end
+
+function UpdateXRay()
+    for _, BasePart : BasePart in workspace:GetDescendants() do
+        if not BasePart:IsA("BasePart") then continue end
+        if IsPartOfCharacter(BasePart) then continue end
+
+        if not BasePart:FindFirstChild("OriginalTransparency") then
+            local newOriginalTransparency = Instance.new("NumberValue")
+            newOriginalTransparency.Name = "OriginalTransparency"
+            newOriginalTransparency.Value = BasePart.Transparency
+            newOriginalTransparency.Parent = BasePart
+        end
+        
+        if BasePart.Transparency ~= 1 then
+            BasePart.Transparency = Graphic_XRayTransparency
+        end
+    end
+end
+
+function ToggleXRay()
+    if Graphic_XRayEnabled == true then
+        while Graphic_XRayEnabled == true do
+            UpdateXRay()
+
+            task.wait(1)
+        end
+    else
+        for _, BasePart : BasePart in workspace:GetDescendants() do
+            if not BasePart:IsA("BasePart") then continue end
+            
+            if BasePart:FindFirstChild("OriginalTransparency") then
+                BasePart.Transparency = BasePart.OriginalTransparency.Value
+            end
+        end
     end
 end
 
@@ -2289,6 +2362,34 @@ worldSection:AddSlider({
 	end    
 })
 
+worldSection:AddToggle({
+	Name = "X-Ray",
+	Default = false,
+    Flag = "Toggle_XRay",
+	Callback = function(Value)
+        Graphic_XRayEnabled = Value
+
+        ToggleXRay()
+	end    
+})
+
+worldSection:AddSlider({
+	Name = "Transparency",
+	Min = 10,
+	Max = 90,
+	Default = 50,
+	Color = Color3.fromRGB(255,255,255),
+	Increment = 5,
+	ValueName = "%",
+    Save = true,
+    Flag = "XRayTransparency_Graphic",
+	Callback = function(Value)
+        Graphic_XRayTransparency = Value/100
+
+        UpdateXRay()
+	end    
+})
+
 local cameraSection = graphicTab:AddSection({
 	Name = "Camera"
 })
@@ -2399,7 +2500,6 @@ antiAFKSection:AddToggle({
         Farm_AutoJump = Value
 
         WorkInProgressNotification(Value)
-        
         --[[if Farm_AutoJump == true then
             RunService:BindToRenderStep("AutoJump", Enum.RenderPriority.Last.Value, AutoJump)
         else
@@ -2821,12 +2921,42 @@ debugfeaturesSection:AddToggle({
 	end    
 })
 
+local debugBrowsersSection = debugTab:AddSection({
+	Name = "Browsers"
+})
+
+debugBrowsersSection:AddButton({
+	Name = "Dex Explorer",
+	Callback = function()
+        if dexExplorerLaunched == false then
+            dexExplorerLaunched = true
+
+            OrionLib:MakeNotification({
+                Name = "Browsers",
+                Content = "Dex Explorer is launching shortly.",
+                Image = "rbxassetid://4483345998",
+                Time = 3
+            })
+
+            loadstring(game:HttpGet('https://raw.githubusercontent.com/dgthst/dgthst/refs/heads/main/DexExplorer.lua'))()
+        else
+            OrionLib:MakeNotification({
+                Name = "Browsers",
+                Content = "Dex Explorer has already been launched.",
+                Image = "rbxassetid://4483345998",
+                Time = 2
+            })
+        end
+  	end    
+})
+
 --[----]--
 
 local updatesSection = changelogTab:AddSection({
 	Name = "Updates"
 })
 
+updatesSection:AddParagraph(`- Added X-Ray`,"Added (2.0.22)")
 updatesSection:AddParagraph(`- Added Auto Upgrades`,"Added (2.0.18)")
 updatesSection:AddParagraph(`- Better ESP, more features`,"Added (2.0.17)")
 updatesSection:AddParagraph(`- Better FPS handling, more features`,"Added (2.0.9)")
