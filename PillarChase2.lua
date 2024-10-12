@@ -1758,19 +1758,33 @@ function IsPartOfCharacter(BasePart)
 end
 
 function UpdateXRay()
+    if Graphic_XRayEnabled == true then
+        for _, BasePart : BasePart in workspace:GetDescendants() do
+            if not BasePart:IsA("BasePart") then continue end
+            if IsPartOfCharacter(BasePart) then continue end
+    
+            if not BasePart:FindFirstChild("OriginalTransparency") then
+                local newOriginalTransparency = Instance.new("NumberValue")
+                newOriginalTransparency.Name = "OriginalTransparency"
+                newOriginalTransparency.Value = BasePart.Transparency
+                newOriginalTransparency.Parent = BasePart
+            end
+            
+            if BasePart.Transparency ~= 1 then
+                BasePart.Transparency = Graphic_XRayTransparency
+            end
+        end
+    else
+        DisableXRay()
+    end
+end
+
+function DisableXRay()
     for _, BasePart : BasePart in workspace:GetDescendants() do
         if not BasePart:IsA("BasePart") then continue end
-        if IsPartOfCharacter(BasePart) then continue end
-
-        if not BasePart:FindFirstChild("OriginalTransparency") then
-            local newOriginalTransparency = Instance.new("NumberValue")
-            newOriginalTransparency.Name = "OriginalTransparency"
-            newOriginalTransparency.Value = BasePart.Transparency
-            newOriginalTransparency.Parent = BasePart
-        end
         
-        if BasePart.Transparency ~= 1 then
-            BasePart.Transparency = Graphic_XRayTransparency
+        if BasePart:FindFirstChild("OriginalTransparency") then
+            BasePart.Transparency = BasePart.OriginalTransparency.Value
         end
     end
 end
@@ -1783,13 +1797,7 @@ function ToggleXRay()
             task.wait(1)
         end
     else
-        for _, BasePart : BasePart in workspace:GetDescendants() do
-            if not BasePart:IsA("BasePart") then continue end
-            
-            if BasePart:FindFirstChild("OriginalTransparency") then
-                BasePart.Transparency = BasePart.OriginalTransparency.Value
-            end
-        end
+        DisableXRay()
     end
 end
 
@@ -2375,8 +2383,8 @@ worldSection:AddToggle({
 
 worldSection:AddSlider({
 	Name = "Transparency",
-	Min = 10,
-	Max = 90,
+	Min = 5,
+	Max = 95,
 	Default = 50,
 	Color = Color3.fromRGB(255,255,255),
 	Increment = 5,
