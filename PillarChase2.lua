@@ -21,6 +21,7 @@ local PlayerGui = localPlayer.PlayerGui
 local CurrentCamera = workspace.CurrentCamera
 
 local PLAYER_StaminaConservation = false
+local PLAYER_AlwaysBeSurvivor = false
 
 local ESP_Enabled = false
 local ESP_ViewKiller = false
@@ -193,6 +194,9 @@ local ItemToInfo = {
 local MonsterToInfo = {
     ["Zombie"] = {
         ["Cooldown"] = 2.475;
+    };
+    ["The Fogborn"] = {
+        ["Cooldown"] = 1.545;
     };
 }
 
@@ -1630,6 +1634,24 @@ function ListenForAttack(messageOutput, messageType)
     end
 end
 
+function AlwaysBeSurvivor()
+    while AlwaysBeSurvivor == true do
+        local roundHandler = workspace.Server.RoundHandler
+        local AFKEvent = PlayerGui.LobbyGUI.WorkGUI.AFK
+
+        if roundHandler.Mode.Value == "Intermission" then
+            if roundHandler.Timer.Value == 1 then
+                task.wait(1)
+                AFKEvent:FireServer(true)
+            else
+                AFKEvent:FireServer(false)
+            end
+        end
+        
+        task.wait(0.1)
+    end
+end
+
 -- Tabs
 
 local mainTab = Window:MakeTab({
@@ -1901,6 +1923,23 @@ playerStatusSection:AddToggle({
             RunService:BindToRenderStep("StaminaConservation", Enum.RenderPriority.First.Value, ConserveStamina)
         else
             RunService:UnbindFromRenderStep("StaminaConservation")
+        end
+	end    
+})
+
+local playerServerSection = playerTab:AddSection({
+	Name = "Server"
+})
+
+playerServerSection:AddToggle({
+	Name = "Always Be Survivor",
+	Default = false,
+    Flag = "Toggle_AlwaysBeSurvivor",
+	Callback = function(Value)
+        PLAYER_AlwaysBeSurvivor = Value
+
+        if PLAYER_AlwaysBeSurvivor == true then
+            AlwaysBeSurvivor()
         end
 	end    
 })
