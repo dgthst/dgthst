@@ -674,9 +674,7 @@ function WatchForCooldown()
         if playerIsKiller then
             for _, attackSound in character.HumanoidRootPart:GetChildren() do
                 if not attackSound:IsA("Sound") then continue end
-
-                local lowercaseName = attackSound.Name:lower()
-                if not lowercaseName:find("attack") then continue end
+                if attackSound.Name ~= "Attack" then continue end
 
                 if attackSound.IsPlaying == true and cooldownViewCooldown == false then
                     cooldownViewCooldown = true
