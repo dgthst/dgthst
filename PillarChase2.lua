@@ -1689,7 +1689,7 @@ function ListenForAttack(messageOutput, messageType)
             local debugText = `[AT]: {math.round((GetDateTime() - lastAttackTime)*1000)/1000}`
             outputLabel.Text = debugText
 
-            task.delay(3, function()
+            task.delay(1, function()
                 if outputLabel.Text == debugText then
                     outputLabel:Destroy()
                 end
