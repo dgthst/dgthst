@@ -3,7 +3,7 @@
 local OrionLib = loadstring(game:HttpGet(('https://raw.githubusercontent.com/shlexware/Orion/main/source')))()
 local Window = OrionLib:MakeWindow({Name = "Pillar Chase Panel", HidePremium = false, Intro = false, IntroText = "SIGMA ™", SaveConfig = true, ConfigFolder = "PC2Config"})
 
-local currentVersion = "2.0.20"
+local currentVersion = "2.0.21"
 
 -- Services
 
@@ -39,6 +39,7 @@ local ESP_RefreshRate = nil
 
 local Ability_AutoJumpMX = false
 local Ability_AutoSolveBaldi = false
+local Ability_AutoBreakVapor = false
 
 local Item_ItemSelected = nil
 local Item_InfiniteStephano = false
@@ -195,8 +196,47 @@ local MonsterToInfo = {
     ["Zombie"] = {
         ["Cooldown"] = 2.475;
     };
+    ["Vapor"] = {
+        ["Cooldown"] = 2.175;
+    };
+    ["Rosemary"] = {
+        ["Cooldown"] = 1; -- PLACEHOLDER
+    };
+    ["Ao Oni"] = {
+        ["Cooldown"] = 1; -- PLACEHOLDER
+    };
     ["The Fogborn"] = {
         ["Cooldown"] = 1.545;
+    };
+    ["EXE"] = {
+        ["Cooldown"] = 1; -- PLACEHOLDER
+    };
+    ["Baldi"] = {
+        ["Cooldown"] = 1; -- PLACEHOLDER
+    };
+    ["Uncle Samsonite"] = {
+        ["Cooldown"] = 1; -- PLACEHOLDER
+    };
+    ["Springtrap"] = {
+        ["Cooldown"] = 1; -- PLACEHOLDER
+    };
+    ["MX"] = {
+        ["Cooldown"] = 1; -- PLACEHOLDER
+    };
+    ["The Forest King"] = {
+        ["Cooldown"] = 1; -- PLACEHOLDER
+    };
+    ["WYST"] = {
+        ["Cooldown"] = 1; -- PLACEHOLDER
+    };
+    ["Niloticus"] = {
+        ["Cooldown"] = 1; -- PLACEHOLDER
+    };
+    ["Vita Mimic"] = {
+        ["Cooldown"] = 1; -- PLACEHOLDER
+    };
+    ["Fuwatti"] = {
+        ["Cooldown"] = 1; -- PLACEHOLDER
     };
 }
 
@@ -303,14 +343,14 @@ function RefreshESP()
         if playerIsKiller then
             if ESP_ViewKiller then
                 if playerIsKiller.Value == "Zombie" then
-                    AddPlayerESP(character, Color_Zombie, "Zombie")
+                    AddPlayerESP(player, character, Color_Zombie, "Zombie")
                 else
-                    AddPlayerESP(character, Color_Killer, "Killer")
+                    AddPlayerESP(player, character, Color_Killer, "Killer")
                 end
             end
         elseif playerIsSurvivor then
             if ESP_ViewSurvivor then
-                AddPlayerESP(character, Color_Survivor, "Survivor")
+                AddPlayerESP(player, character, Color_Survivor, "Survivor")
             end
         end
     end
@@ -355,7 +395,7 @@ function CreateESPHighlight(parentInstance, espColor)
     newHighlight.Parent = parentInstance
 end
 
-function AddPlayerESP(character, espColor, roleType)
+function AddPlayerESP(player, character, espColor, roleType)
     if ESP_ShowHighlight then
         CreateESPHighlight(character, espColor)
     end
@@ -368,7 +408,7 @@ function AddPlayerESP(character, espColor, roleType)
 
     if ESP_ShowIcon then
         local imageLabel = AddImageLabel(character.PrimaryPart, RoleToIcon[roleType].Color, RoleToIcon[roleType].Image, 0)
-        if localPlayer:IsFriendsWith(Players:GetPlayerFromCharacter(character).UserId) then
+        if localPlayer:IsFriendsWith(player.UserId) then
             AddFriendLabel(imageLabel)
         end
         if roleType == "Survivor" then
@@ -1652,6 +1692,34 @@ function AlwaysBeSurvivor()
     end
 end
 
+function InstantBreakVapor()
+    while true do
+        for _, abilityModel in GetCurrentAbilities() do
+            if abilityModel.Name == "Spider Skull" then
+                local character = localPlayer.Character
+                if not character then continue end
+
+                local skullPart = abilityModel:FindFirstChild("Skull")
+                if not skullPart then continue end
+
+                local torsoPart = character.PrimaryPart or character:FindFirstChildWhichIsA("BasePart")
+                local calculatedDistance = (skullPart.Position - torsoPart.Position).Magnitude or 0
+
+                if calculatedDistance < 15 then
+                    local proximityPrompt = skullPart:FindFirstChildWhichIsA("ProximityPrompt")
+
+                    if proximityPrompt then
+                        proximityPrompt.MaxActivationDistance = 15
+                        fireproximityprompt(proximityPrompt)
+                    end
+                end
+            end
+        end
+
+        task.wait(0.05)
+    end
+end
+
 -- Tabs
 
 local mainTab = Window:MakeTab({
@@ -1937,30 +2005,52 @@ playerServerSection:AddToggle({
     Flag = "Toggle_AlwaysBeSurvivor",
 	Callback = function(Value)
         PLAYER_AlwaysBeSurvivor = Value
-
-        if PLAYER_AlwaysBeSurvivor == true then
+        
+        WorkInProgressNotification(Value)
+        --[[if PLAYER_AlwaysBeSurvivor == true then
             AlwaysBeSurvivor()
-        end
+        end]]
 	end    
 })
 
 --[----]--
 
-local autoCounterSection = abilityTab:AddSection({
-	Name = "Automatic Counter"
+local vapor_AbilitySection = abilityTab:AddSection({
+	Name = "Vapor"
 })
 
-autoCounterSection:AddToggle({
-	Name = "Auto Jump (MX)",
+vapor_AbilitySection:AddToggle({
+	Name = "Instant Break (Skull)",
 	Default = false,
-    Flag = "Toggle_AutoJumpMX",
+    Flag = "Toggle_InstantBreakVapor",
+	Callback = function(Value)
+        Ability_AutoBreakVapor = Value
+
+        if Ability_AutoBreakVapor == true then
+            InstantBreakVapor()
+        end
+	end    
+})
+
+local exe_AbilitySection = abilityTab:AddSection({
+	Name = "EXE"
+})
+
+exe_AbilitySection:AddToggle({
+	Name = "Instant Escape (Vines)",
+	Default = false,
+    Flag = "Toggle_InstantEscapeEXE",
 	Callback = function(Value)
         WorkInProgressNotification(Value)
 	end    
 })
 
-autoCounterSection:AddToggle({
-	Name = "Auto Solve (Baldi)",
+local baldi_AbilitySection = abilityTab:AddSection({
+	Name = "Baldi"
+})
+
+baldi_AbilitySection:AddToggle({
+	Name = "Auto Solve (Math)",
 	Default = false,
     Flag = "Toggle_AutoSolveBaldi",
 	Callback = function(Value)
@@ -1974,23 +2064,14 @@ autoCounterSection:AddToggle({
 	end    
 })
 
-local activeCounterSection = abilityTab:AddSection({
-	Name = "Active Counter"
+local mx_AbilitySection = abilityTab:AddSection({
+	Name = "MX"
 })
 
-activeCounterSection:AddToggle({
-	Name = "Instant Escape (EXE)",
+mx_AbilitySection:AddToggle({
+	Name = "Auto Jump (Stomp)",
 	Default = false,
-    Flag = "Toggle_InstantEscapeEXE",
-	Callback = function(Value)
-        WorkInProgressNotification(Value)
-	end    
-})
-
-activeCounterSection:AddToggle({
-	Name = "Instant Break (Vapor)",
-	Default = false,
-    Flag = "Toggle_InstantBreakVapor",
+    Flag = "Toggle_AutoJumpMX",
 	Callback = function(Value)
         WorkInProgressNotification(Value)
 	end    
@@ -2053,13 +2134,14 @@ itemUsageSection:AddToggle({
 	Callback = function(Value)
         Item_InfiniteFlashlight = Value
 
-        if Item_InfiniteFlashlight == true then
+        WorkInProgressNotification(Value)
+        --[[if Item_InfiniteFlashlight == true then
             RunService:BindToRenderStep("InfiniteFlashlight", Enum.RenderPriority.Last.Value, InfiniteFlashlight)
             RunService:BindToRenderStep("InfiniteUltraFlashlight", Enum.RenderPriority.Last.Value, InfiniteUltraFlashlight)
         else
             RunService:UnbindFromRenderStep("InfiniteFlashlight")
             RunService:UnbindFromRenderStep("InfiniteUltraFlashlight")
-        end
+        end]]
 	end    
 })
 
