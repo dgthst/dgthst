@@ -501,6 +501,29 @@ local function ActivateAntiAFK()
 	keypress(75)
 end
 
+local function SafelyRefillArmor()
+	local upgrades = LocalPlayer:FindFirstChild("Upgrades")
+	if not upgrades then
+		return
+	end
+
+	local playerUpgrades = upgrades:FindFirstChild("PlayerUpgrades")
+	if not playerUpgrades then
+		return
+	end
+
+	local armorUpgrade = playerUpgrades:FindFirstChild("Armour")
+	if not armorUpgrade then
+		return
+	end
+
+	if armorUpgrade.UPurchased.Value == false then
+		return
+	end
+
+	SellRepairEvent:FireServer("Armour")
+end
+
 -- [[Default]] --
 
 local function OnInputBegan(input, processed)
@@ -703,7 +726,7 @@ Section_Shop_Refill:Button({
 	Text = "Armor",
 	Tooltip = "Refill body armor. (Cannot be used outside during an active wave.)",
 	Callback = function(Value)
-		SellRepairEvent:FireServer("Armour")
+		SafelyRefillArmor()
 	end
 })
 
