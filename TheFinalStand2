@@ -680,7 +680,7 @@ Section_Farm_Settings:Toggle({
 	end
 })
 
-Section_Farm_Settings:Button({
+Section_Farm_Settings:Toggle({
 	Text = "Anti-AFK",
 	Tooltip = "Prevents you from being kicked for idle-status.",
 	Callback = function(Value)
