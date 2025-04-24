@@ -37,9 +37,9 @@ local CurrentCamera = workspace.CurrentCamera
 local Map = workspace.Map
 local Shop = Map.Shop
 
-local ShopRegions = ReplicatedStorage:WaitForChild("ShopRegions")
-local SpawnExit = ShopRegions:WaitForChild("SpawnExit")
-local ShopExit = ShopRegions:WaitForChild("ShopExit")
+local ShopRegions = ReplicatedStorage:FindFirstChild("ShopRegions") or workspace
+local SpawnExit = ShopRegions:FindFirstChild("SpawnExit")
+local ShopExit = ShopRegions:FindFirstChild("ShopExit")
 
 local Combat_Killaura = false
 local Combat_AimAssist = false
@@ -78,8 +78,11 @@ local frameCounter = 0
 
 -- Required Checks
 
-for _, child in ReplicatedStorage.Tools:GetChildren() do
-	table.insert(weaponList, child.Name)
+local toolsFolder = ReplicatedStorage:FindFirstChild("Tools")
+if toolsFolder then
+	for _, child in toolsFolder:GetChildren() do
+		table.insert(weaponList, child.Name)
+	end
 end
 
 -- Functions
@@ -375,7 +378,7 @@ local function Run_Farm_Melee()
 	end
 
 	if not localCharacter:GetAttribute("Roblox3") then
-		local forwardCFrame = ShopExit.CFrame * CFrame.new(0, 0, -)
+		local forwardCFrame = ShopExit.CFrame * CFrame.new(0, 0, -1)
 		CurrentCamera.CFrame = CFrame.new(CurrentCamera.CFrame.Position, forwardCFrame.Position)
 
 		local calculation = (forwardCFrame.Position - localRoot.Position)
@@ -492,6 +495,10 @@ local function Run_Combat_NoWeaponSpread(toggle)
 
 		UpdateWeaponSpread(tool, toggle)
 	end
+end
+
+local function ActivateAntiAFK()
+	keypress(75)
 end
 
 -- [[Default]] --
@@ -670,6 +677,18 @@ Section_Farm_Settings:Toggle({
 	Tooltip = "Purchase melee upgrades when possible. (Will attempt to max.)",
 	Callback = function(Value)
 		Farm_MeleeUpgrades = Value
+	end
+})
+
+Section_Farm_Settings:Button({
+	Text = "Anti-AFK",
+	Tooltip = "Prevents you from being kicked for idle-status.",
+	Callback = function(Value)
+		if Value then
+			RunService:BindToRenderStep("ActivateAntiAFK", Enum.RenderPriority.Last.Value, ActivateAntiAFK)
+		else
+			RunService:UnbindFromRenderStep("ActivateAntiAFK")
+		end
 	end
 })
 
