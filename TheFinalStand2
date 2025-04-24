@@ -1,0 +1,770 @@
+-- Library
+
+local Library = loadstring(game:HttpGet('https://raw.githubusercontent.com/dgthst/dgthst/refs/heads/main/ShamanLibrary'))()
+local Flags = Library.Flags
+
+local Window = Library:Window({
+	Text = "The Final Menu"
+})
+
+-- Services
+
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local UserInputService = game:GetService("UserInputService")
+local CoreGui = game:WaitForChild("CoreGui")
+
+-- Remotes
+
+local RemoteEvents = ReplicatedStorage:FindFirstChild("RemoteEvents")
+local RemoteFireMeleeEvent = RemoteEvents:FindFirstChild("RemoteFireMelee")
+local UpgradeStructurePlayerEvent = RemoteEvents:FindFirstChild("UpgradeStructurePlayer")
+local SellRepairEvent = RemoteEvents:FindFirstChild("SellRepair")
+local BuyWeaponEvent = RemoteEvents:FindFirstChild("BuyWeapon")
+local SellWeaponEvent = RemoteEvents:FindFirstChild("SellWeapon")
+local PlayerTeleportEvent = RemoteEvents:FindFirstChild("PlayerTeleport")
+
+local RemoteFunctions = ReplicatedStorage:FindFirstChild("RemoteFunctions")
+local VoteSkipFunction = RemoteFunctions:FindFirstChild("VoteSkip")
+
+-- Variables
+
+local LocalPlayer = Players.LocalPlayer
+local Backpack = LocalPlayer.Backpack
+local CurrentCamera = workspace.CurrentCamera
+
+local Map = workspace.Map
+local Shop = Map.Shop
+
+local ShopRegions = ReplicatedStorage:WaitForChild("ShopRegions")
+local SpawnExit = ShopRegions:WaitForChild("SpawnExit")
+local ShopExit = ShopRegions:WaitForChild("ShopExit")
+
+local Combat_Killaura = false
+local Combat_AimAssist = false
+local Combat_NoSpread = false
+
+local ESP_Zombie = false
+
+local Farm_MeleeUpgrades = false
+
+local Shop_Purchase = nil
+local Shop_Sell = nil
+
+local isAiming = false
+local isReselling = false
+
+local settings = {
+	aimKeybind = Enum.UserInputType.MouseButton2
+}
+
+local slotToCode = {
+    [1] = 49,  -- '1' key
+    [2] = 50,  -- '2' key
+    [3] = 51,  -- '3' key
+    [4] = 52,  -- '4' key
+    [5] = 53,  -- '5' key
+    [6] = 54,  -- '6' key
+    [7] = 55,  -- '7' key
+    [8] = 56,  -- '8' key
+    [9] = 57,  -- '9' key
+    [0] = 48,  -- '0' key
+}
+
+local weaponList = {}
+
+local frameCounter = 0
+
+-- Required Checks
+
+for _, child in ReplicatedStorage.Tools:GetChildren() do
+	table.insert(weaponList, child.Name)
+end
+
+-- Functions
+
+-- [Helper] --
+
+local function GetLocalCharacter()
+	local localCharacter = LocalPlayer.Character
+	if not localCharacter then
+		return
+	end
+
+	local localRoot = localCharacter:FindFirstChild("HumanoidRootPart")
+	if not localRoot then
+		return
+	end
+
+	return localCharacter, localRoot
+end
+
+local function GetClosestZombie()
+	local localCharacter, localRoot = GetLocalCharacter()
+	if not localCharacter then
+		return
+	end
+
+	local closestModel = nil
+	local shortestDistance = nil
+
+	for _, model in workspace.Zombies:GetChildren() do
+		local humanoid = model:FindFirstChild("Zombie")
+		if not humanoid then
+			continue
+		end
+
+		if humanoid.Health <= 0 then
+			continue
+		end
+
+		local rootPart = model:FindFirstChild("HumanoidRootPart")
+		if not rootPart then
+			continue
+		end
+
+		local head = model:FindFirstChild("Head")
+		if not head then
+			continue
+		end
+
+		local magnitude = (rootPart.Position - localRoot.Position).Magnitude
+
+		if shortestDistance and magnitude > shortestDistance then
+			continue
+		end
+
+		closestModel = model
+		shortestDistance = magnitude
+	end
+
+	return closestModel, if closestModel then closestModel:FindFirstChild("Head") else nil
+end
+
+local function UpdateESPHighlights()
+    for _, highlight in CoreGui.RuntimeObjects.Zombie:GetChildren() do
+        highlight.Enabled = ESP_Zombie
+    end
+end
+
+local function ToolNameToBackpackSlot(name)
+	local RobloxGui = CoreGui.RobloxGui
+	local BackpackFrame = RobloxGui.Backpack
+	local HotbarFrame = BackpackFrame.Hotbar
+
+	for _, textLabel in HotbarFrame:GetChildren() do
+		if textLabel.ToolName.Text == name then
+			return tonumber(textLabel.Number.Text)
+		end
+	end
+end
+
+-- [Functional] --
+
+local function Run_KillAura_Melee()
+	local localCharacter = GetLocalCharacter()
+	if not localCharacter then
+		return
+	end
+
+	local zombieModel, zombieHead = GetClosestZombie()
+	if not zombieModel then
+		return
+	end
+
+	do -- Knife
+		local weapon = "Melee"
+		if weapon then
+			local args = {
+				[1] = weapon,
+				[2] = {
+					[1] = {
+						[1] = zombieHead,
+						[2] = {}
+					}
+				}
+			}
+
+			RemoteFireMeleeEvent:FireServer(unpack(args))
+		end
+	end
+
+	do -- Bat
+		local weapon = localCharacter:FindFirstChild("Baseball Bat")
+		if weapon then
+			local args = {
+				[1] = weapon,
+				[2] = {
+					[1] = {
+						[1] = zombieHead,
+						[2] = {
+							["Critical"] = true,
+							["OverDamage"] = true,
+							["ActiveAnimation"] = "Over"
+						}
+					}
+				},
+				[3] = {
+					["ActiveAnimation"] = "Over"
+				}
+			}
+
+			RemoteFireMeleeEvent:FireServer(unpack(args))
+		end
+	end
+
+	do -- Shovel
+		local weapon = localCharacter:FindFirstChild("Shovel")
+		if weapon then
+			local args = {
+				[1] = weapon,
+				[2] = {
+					[1] = {
+						[1] = zombieHead,
+						[2] = {
+							["Critical"] = true,
+							["OverDamage"] = true,
+							["ActiveAnimation"] = "Over"
+						}
+					}
+				},
+				[3] = {
+					["ActiveAnimation"] = "Over"
+				}
+			}
+
+			RemoteFireMeleeEvent:FireServer(unpack(args))
+		end
+	end
+
+	do -- Military Axe
+		local weapon = localCharacter:FindFirstChild("Military Axe")
+		if weapon then
+			local args = {
+				[1] = weapon,
+				[2] = {
+					[1] = {
+						[1] = zombieHead,
+						[2] = {
+							["Critical"] = true,
+							["OverDamage"] = true,
+							["ActiveAnimation"] = "Over"
+						}
+					}
+				},
+				[3] = {
+					["ActiveAnimation"] = "Over"
+				}
+			}
+
+			RemoteFireMeleeEvent:FireServer(unpack(args))
+		end
+	end
+
+	do -- Katana
+		local weapon = localCharacter:FindFirstChild("Katana")
+		if weapon then
+			local args = {
+				[1] = weapon,
+				[2] = {
+					[1] = {
+						[1] = zombieHead,
+						[2] = {
+							["Critical"] = true,
+							["OverDamage"] = true,
+							["ActiveAnimation"] = "Over"
+						}
+					}
+				},
+				[3] = {
+					["ActiveAnimation"] = "Over"
+				}
+			}
+
+			RemoteFireMeleeEvent:FireServer(unpack(args))
+		end
+	end
+
+	do -- Energy Sword
+		local weapon = localCharacter:FindFirstChild("Energy Sword")
+		if weapon then
+			local args = {
+				[1] = weapon,
+				[2] = {
+					[1] = {
+						[1] = zombieHead,
+						[2] = {
+							["Critical"] = true,
+							["ActiveAnimation"] = "Right",
+							["AltDamage"] = true
+						}
+					}
+				},
+				[3] = {
+					["ActiveAnimation"] = "Right"
+				}
+			}
+
+			RemoteFireMeleeEvent:FireServer(unpack(args))
+		end
+	end
+end
+
+local function Run_Aimbot_AimAssist()
+	if not aiming then
+		return
+	end
+
+	local zombieModel, zombieHead = GetClosestZombie()
+	if not zombieModel then
+		return
+	end
+
+	CurrentCamera.CFrame = CFrame.new(CurrentCamera.CFrame.Position, zombieHead.Position)
+end
+
+local function Run_Farm_Melee()
+	frameCounter += 1
+
+	local localCharacter, localRoot = GetLocalCharacter()
+	if not localCharacter then
+		return
+	end
+
+	local humanoid = localCharacter:FindFirstChildWhichIsA("Humanoid")
+	if not humanoid then
+		return
+	end
+
+	if humanoid.Health <= 0 then
+		return
+	end
+	
+	local camDistance = (CurrentCamera.CFrame.Position - localCharacter.Head.Position).Magnitude
+	if camDistance > 50 then
+		return
+	end
+
+	if not localCharacter:GetAttribute("Roblox") then
+		CurrentCamera.CFrame = CFrame.new(CurrentCamera.CFrame.Position, SpawnExit.Position)
+
+		local calculation = (SpawnExit.Position - localRoot.Position)
+		if calculation.Magnitude > 3 then
+			humanoid:Move(calculation.Unit)
+			return
+		end
+
+		localCharacter:SetAttribute("Roblox", true)
+
+		PlayerTeleportEvent:FireServer(localRoot.Position, 1)
+		localCharacter:TranslateBy(Vector3.new(0, 0.2, 8))
+	end
+
+	if not localCharacter:GetAttribute("Roblox2") then
+		local forwardCFrame = ShopExit.CFrame * CFrame.new(0, 0, -42)
+		CurrentCamera.CFrame = CFrame.new(CurrentCamera.CFrame.Position, forwardCFrame.Position)
+
+		local calculation = (forwardCFrame.Position - localRoot.Position)
+		if calculation.Magnitude > 3 then
+			humanoid:Move(calculation.Unit)
+			return
+		end
+
+		localCharacter:SetAttribute("Roblox2", true)
+	end
+
+	if not localCharacter:GetAttribute("Roblox3") then
+		local forwardCFrame = ShopExit.CFrame * CFrame.new(0, 0, -)
+		CurrentCamera.CFrame = CFrame.new(CurrentCamera.CFrame.Position, forwardCFrame.Position)
+
+		local calculation = (forwardCFrame.Position - localRoot.Position)
+		if calculation.Magnitude > 3 then
+			humanoid:Move(calculation.Unit)
+			return
+		end
+
+		localCharacter:SetAttribute("Roblox3", true)
+	end
+
+	if LocalPlayer.Voted.Value == false then
+		VoteSkipFunction:InvokeServer()
+	end
+
+	if frameCounter >= 10 then
+		frameCounter = 0
+
+		if Farm_MeleeUpgrades then
+			UpgradeStructurePlayerEvent:FireServer("Melee", "KillMoney")
+			UpgradeStructurePlayerEvent:FireServer("Melee", "AttackSpeed")
+			UpgradeStructurePlayerEvent:FireServer("Melee", "Damage")
+			UpgradeStructurePlayerEvent:FireServer("Melee", "Lifesteal")
+			UpgradeStructurePlayerEvent:FireServer("Melee", "WitherDamage")
+		end
+	end
+end
+
+local function Run_Combat_InfiniteAmmoResell()
+	if isReselling then
+		return
+	end
+
+	local localCharacter, localRoot = GetLocalCharacter()
+	if not localCharacter then
+		return
+	end
+
+	local humanoid = localCharacter:FindFirstChildWhichIsA("Humanoid")
+	if not humanoid then
+		return
+	end
+
+	local foundTool = localCharacter:FindFirstChildWhichIsA("Tool")
+	if not foundTool then
+		return
+	end
+
+	local currentValues = foundTool:FindFirstChild("CurrentValues")
+	if not currentValues then
+		return
+	end
+
+	if currentValues.Clip.Value > 0 then
+		return
+	end
+
+	if isReselling then
+		return
+	end
+	isReselling = true
+
+	local toolName = foundTool.Name
+
+	SellWeaponEvent:FireServer(toolName)
+	RunService.Heartbeat:Wait()
+
+	BuyWeaponEvent:FireServer(toolName)
+	RunService.Heartbeat:Wait()
+
+	local slot = ToolNameToBackpackSlot(toolName)
+	local code = slotToCode[slot]
+
+	keypress(code)
+	RunService.Heartbeat:Wait()
+	keyrelease(code)
+
+	isReselling = false
+end
+
+local function UpdateWeaponSpread(tool, toggle)
+	local currentValues = tool:FindFirstChild("CurrentValues")
+	local defaultValues = tool:FindFirstChild("DefaultValues")
+
+	if not (currentValues and defaultValues) then
+		return
+	end	
+
+	currentValues.Spread.Value = if toggle then defaultValues.Spread.Value else 0
+	currentValues.SpreadDecrease.Value = if toggle then defaultValues.SpreadDecrease.Value else 0
+	currentValues.SpreadIncrease.Value = if toggle then defaultValues.SpreadIncrease.Value else 0
+	currentValues.SpreadMax.Value = if toggle then defaultValues.SpreadMax.Value else 0
+
+	currentValues.ZoomSpread.Value = if toggle then defaultValues.ZoomSpread.Value else 0
+	currentValues.ZoomSpreadDecrease.Value = if toggle then defaultValues.ZoomSpreadDecrease.Value else 0
+	currentValues.ZoomSpreadIncrease.Value = if toggle then defaultValues.ZoomSpreadIncrease.Value else 0
+	currentValues.ZoomSpreadMax.Value = if toggle then defaultValues.ZoomSpreadMax.Value else 0
+end
+
+local function Run_Combat_NoWeaponSpread(toggle)
+	local localCharacter, localRoot = GetLocalCharacter()
+	if not localCharacter then
+		return
+	end
+
+	for _, tool in Backpack:GetChildren() do
+		UpdateWeaponSpread(tool, toggle)
+	end
+	
+	for _, tool in localCharacter:GetChildren() do
+		if not tool:IsA("Tool") then
+			continue
+		end
+
+		UpdateWeaponSpread(tool, toggle)
+	end
+end
+
+-- [[Default]] --
+
+local function OnInputBegan(input, processed)
+	if input.UserInputType == settings.aimKeybind then
+		aiming = true
+	end
+end
+
+local function OnInputEnded(input, processed)
+	if input.UserInputType == settings.aimKeybind then
+		aiming = false
+	end
+end
+
+local function SetupESP()
+    local folder_main = Instance.new("Folder")
+    folder_main.Name = "RuntimeObjects"
+    folder_main.Parent = CoreGui
+    
+    local folder_zombie = Instance.new("Folder")
+    folder_zombie.Name = "Zombie"
+    folder_zombie.Parent = folder_main
+
+    local function OnChildAdded(model)
+        local highlight = Instance.new("Highlight")
+        highlight.FillTransparency = 1
+        highlight.OutlineColor = Color3.new(1, 1, 1)
+        highlight.Enabled = ESP_Zombie
+        highlight.Adornee = model
+        highlight.Parent = folder_zombie
+    end
+    
+    workspace.Zombies.ChildAdded:Connect(OnChildAdded)
+end
+
+-- Elements
+
+-- [Tabs] -- 
+
+local Tab_Combat = Window:Tab({
+	Text = "Combat"
+})
+
+local Tab_Shop = Window:Tab({
+	Text = "Shop"
+})
+
+local Tab_ESP = Window:Tab({
+	Text = "ESP"
+})
+
+local Tab_Farm = Window:Tab({
+	Text = "Farm"
+})
+
+-- [Main] --
+
+local Section_Combat_Aiming = Tab_Combat:Section({
+	Text = "Aim Assist",
+	Side = "Left"
+})
+
+Section_Combat_Aiming:Toggle({
+	Text = "Enabled",
+	Tooltip = "Locks camera towards the nearest zombie. (Keybind: M2)",
+	Callback = function(Value)
+		Combat_AimAssist = Value
+
+		if Value then
+			RunService:BindToRenderStep("Aimbot_AimAssist", Enum.RenderPriority.Last.Value, Run_Aimbot_AimAssist)
+		else
+			RunService:UnbindFromRenderStep("Aimbot_AimAssist")
+		end
+	end
+})
+
+local Section_Combat_MeleeKillAura = Tab_Combat:Section({
+	Text = "Killaura",
+	Side = "Right"
+})
+
+Section_Combat_MeleeKillAura:Toggle({
+	Text = "Enabled",
+	Tooltip = "Automatically attacks zombies within melee distance. (Guns being equipped does not affect this.)",
+	Callback = function(Value)
+		Combat_Killaura = Value
+
+		if Value then
+			RunService:BindToRenderStep("KillAura_Melee", Enum.RenderPriority.Character.Value, Run_KillAura_Melee)
+		else
+			RunService:UnbindFromRenderStep("KillAura_Melee")
+		end
+	end
+})
+
+local Section_Combat_Weapon = Tab_Combat:Section({
+	Text = "Weapon Config",
+	Side = "Left"
+})
+
+Section_Combat_Weapon:Toggle({
+	Text = "Empty Magazine Sell",
+	Tooltip = "When your weapon runs out of ammo, sell it, then purchase it. (REQUIRES the BARGAINER perk at level 4 for guns other than pistol.)",
+	Callback = function(Value)
+		if Value then
+			RunService:BindToRenderStep("Combat_InfiniteAmmoResell", Enum.RenderPriority.Last.Value, Run_Combat_InfiniteAmmoResell)
+		else
+			RunService:UnbindFromRenderStep("Combat_InfiniteAmmoResell")
+		end
+	end
+})
+
+Section_Combat_Weapon:Toggle({
+	Text = "No Bullet Spread",
+	Tooltip = "Grants the weapon absolute accuracy. (MUST BE APPLIED BEFORE EQUIPPING, DOES NOT AFFECT MAX BULLET RANGE)",
+	Callback = function(Value)
+		Combat_NoSpread = Value
+		
+		if Value then
+			RunService:BindToRenderStep("Combat_NoWeaponSpread", Enum.RenderPriority.Last.Value, function()
+				Run_Combat_NoWeaponSpread(false)
+			end)
+		else
+			RunService:UnbindFromRenderStep("Combat_NoWeaponSpread")
+
+			Run_Combat_NoWeaponSpread(true)
+		end
+	end
+})
+
+--- [[[]]] ---
+
+local Section_ESP_Zombie = Tab_ESP:Section({
+	Text = "Zombie",
+	Side = "Left"
+})
+
+Section_ESP_Zombie:Toggle({
+	Text = "Enabled",
+	Tooltip = "Create a highlight around zombies.",
+	Callback = function(Value)
+		ESP_Zombie = Value
+
+        UpdateESPHighlights()
+	end
+})
+
+--- [[[]]] ---
+
+local Section_Farm_Melee = Tab_Farm:Section({
+	Text = "Melee Mode",
+	Side = "Left"
+})
+
+Section_Farm_Melee:Toggle({
+	Text = "Enabled",
+	Tooltip = [[("Killaura" must be enabled.)]],
+	Callback = function(Value)
+		if Value then
+			RunService:BindToRenderStep("Farm_Melee", Enum.RenderPriority.Last.Value, Run_Farm_Melee)
+		else
+			RunService:UnbindFromRenderStep("Farm_Melee")
+		end
+	end
+})
+
+local Section_Farm_Settings = Tab_Farm:Section({
+	Text = "Settings",
+	Side = "Right"
+})
+
+Section_Farm_Settings:Toggle({
+	Text = "Melee Upgrades",
+	Tooltip = "Purchase melee upgrades when possible. (Will attempt to max.)",
+	Callback = function(Value)
+		Farm_MeleeUpgrades = Value
+	end
+})
+
+--- [[[]]] ---
+
+local Section_Shop_Refill = Tab_Shop:Section({
+	Text = "Quick Refill",
+	Side = "Left"
+})
+
+Section_Shop_Refill:Button({
+	Text = "Armor",
+	Tooltip = "Refill body armor. (Cannot be used outside during an active wave.)",
+	Callback = function(Value)
+		SellRepairEvent:FireServer("Armour")
+	end
+})
+
+Section_Shop_Refill:Button({
+	Text = "Shop",
+	Tooltip = "Refill shop health. (Cannot be used outside during an active wave.)",
+	Callback = function(Value)
+		SellRepairEvent:FireServer("Shop")
+	end
+})
+
+Section_Shop_Refill:Button({
+	Text = "Barricade",
+	Tooltip = "Refill barricade health. (Cannot be used outside during an active wave.)",
+	Callback = function(Value)
+		SellRepairEvent:FireServer("Barricade")
+	end
+})
+
+Section_Shop_Refill:Button({
+	Text = "Ammo Box",
+	Tooltip = "Refill ammo box. (Cannot be used outside during an active wave.)",
+	Callback = function(Value)
+		SellRepairEvent:FireServer("AmmoBox")
+	end
+})
+
+Section_Shop_Refill:Button({
+	Text = "Ladder Ammo Box",
+	Tooltip = "Refill roof ammo box. (Cannot be used outside during an active wave.)",
+	Callback = function(Value)
+		SellRepairEvent:FireServer("Ladders")
+	end
+})
+
+local Section_Shop_Purchase = Tab_Shop:Section({
+	Text = "Quick Purchase",
+	Side = "Right"
+})
+
+Section_Shop_Purchase:Dropdown({
+	Text = "Weapon List",
+	List = weaponList,
+	Callback = function(Value)
+		Shop_Purchase = Value
+	end
+})
+
+Section_Shop_Purchase:Button({
+	Text = "Complete Transaction",
+	Tooltip = "Purchase the specified weapon. (Can be used outside during an active wave.)",
+	Callback = function(Value)
+		BuyWeaponEvent:FireServer(Shop_Purchase)
+	end
+})
+
+local Section_Shop_Sell = Tab_Shop:Section({
+	Text = "Quick Sell",
+	Side = "Right"
+})
+
+Section_Shop_Sell:Dropdown({
+	Text = "Weapon List",
+	List = weaponList,
+	Callback = function(Value)
+		Shop_Sell = Value
+	end
+})
+
+Section_Shop_Sell:Button({
+	Text = "Complete Transaction",
+	Tooltip = "Sell the specified weapon. (Can be used outside during an active wave.)",
+	Callback = function(Value)
+		SellWeaponEvent:FireServer(Shop_Sell)
+	end
+})
+
+-- Runtime
+
+UserInputService.InputBegan:Connect(OnInputBegan)
+UserInputService.InputEnded:Connect(OnInputEnded)
+
+SetupESP()
