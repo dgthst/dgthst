@@ -59,19 +59,6 @@ local settings = {
 	aimKeybind = Enum.UserInputType.MouseButton2
 }
 
-local slotToCode = {
-    [1] = 49,  -- '1' key
-    [2] = 50,  -- '2' key
-    [3] = 51,  -- '3' key
-    [4] = 52,  -- '4' key
-    [5] = 53,  -- '5' key
-    [6] = 54,  -- '6' key
-    [7] = 55,  -- '7' key
-    [8] = 56,  -- '8' key
-    [9] = 57,  -- '9' key
-    [0] = 48,  -- '0' key
-}
-
 local weaponList = {}
 
 local frameCounter = 0
@@ -149,18 +136,6 @@ local function UpdateESPHighlights()
     for _, highlight in CoreGui.RuntimeObjects.Zombie:GetChildren() do
         highlight.Enabled = ESP_Zombie
     end
-end
-
-local function ToolNameToBackpackSlot(name)
-	local RobloxGui = CoreGui.RobloxGui
-	local BackpackFrame = RobloxGui.Backpack
-	local HotbarFrame = BackpackFrame.Hotbar
-
-	for _, textLabel in HotbarFrame:GetChildren() do
-		if textLabel.ToolName.Text == name then
-			return tonumber(textLabel.Number.Text)
-		end
-	end
 end
 
 -- [Functional] --
@@ -448,13 +423,6 @@ local function Run_Combat_InfiniteAmmoResell()
 
 	BuyWeaponEvent:FireServer(toolName)
 	RunService.Heartbeat:Wait()
-
-	local slot = ToolNameToBackpackSlot(toolName)
-	local code = slotToCode[slot]
-
-	keypress(code)
-	RunService.Heartbeat:Wait()
-	keyrelease(code)
 
 	isReselling = false
 end
