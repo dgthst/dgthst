@@ -4,7 +4,7 @@ local Library = loadstring(game:HttpGet('https://raw.githubusercontent.com/dgths
 local Flags = Library.Flags
 
 local Window = Library:Window({
-	Text = "The Final Menu"
+	Text = "The Final Menu (v1)"
 })
 
 -- Services
@@ -14,6 +14,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
 local CoreGui = game:WaitForChild("CoreGui")
+local VirtualUser = game:GetService("VirtualUser")
 
 -- Remotes
 
@@ -34,8 +35,11 @@ local LocalPlayer = Players.LocalPlayer
 local Backpack = LocalPlayer.Backpack
 local CurrentCamera = workspace.CurrentCamera
 
-local Map = workspace.Map
-local Shop = Map.Shop
+local Map = workspace:FindFirstChild("Map")
+local Shop = Map:FindFirstChild("Shop")
+
+local ToolStorage = ReplicatedStorage:FindFirstChild("Tools")
+local ZombiesFolder = workspace:FindFirstChild("Zombies")
 
 local ShopRegions = ReplicatedStorage:FindFirstChild("ShopRegions") or workspace
 local SpawnExit = ShopRegions:FindFirstChild("SpawnExit")
@@ -43,7 +47,9 @@ local ShopExit = ShopRegions:FindFirstChild("ShopExit")
 
 local Combat_Killaura = false
 local Combat_AimAssist = false
-local Combat_NoSpread = false
+local Combat_AimKeybind = nil
+local Combat_ChangeSpread = nil
+local Combat_PriorityBoss = false
 
 local ESP_Zombie = false
 
@@ -52,16 +58,17 @@ local Farm_MeleeUpgrades = false
 local Shop_Purchase = nil
 local Shop_Sell = nil
 
+local Shop_OverridePurchase = nil
+local Shop_OverrideSell = nil
+
 local isAiming = false
 local isReselling = false
-
-local settings = {
-	aimKeybind = Enum.UserInputType.MouseButton2
-}
 
 local weaponList = {}
 
 local frameCounter = 0
+
+local connection_AntiAFK = nil
 
 -- Required Checks
 
@@ -90,7 +97,11 @@ local function GetLocalCharacter()
 	return localCharacter, localRoot
 end
 
-local function GetClosestZombie()
+local function GetClosestZombie(usePriority)
+	if not ZombiesFolder then
+		return
+	end
+
 	local localCharacter, localRoot = GetLocalCharacter()
 	if not localCharacter then
 		return
@@ -99,26 +110,52 @@ local function GetClosestZombie()
 	local closestModel = nil
 	local shortestDistance = nil
 
-	for _, model in workspace.Zombies:GetChildren() do
+	local function ValidateZombie(model)
 		local humanoid = model:FindFirstChild("Zombie")
 		if not humanoid then
-			continue
+			return
 		end
 
 		if humanoid.Health <= 0 then
-			continue
+			return
 		end
 
 		local rootPart = model:FindFirstChild("HumanoidRootPart")
 		if not rootPart then
-			continue
+			return
 		end
 
 		local head = model:FindFirstChild("Head")
 		if not head then
+			return
+		end
+		
+		return true, rootPart
+	end
+	
+	local function ShouldPreferZombie(model)
+		if not usePriority then
+			return
+		end
+		
+		if Combat_PriorityBoss then
+			if model.Name == "Boss" then
+				return true
+			end
+		end
+	end
+
+	for _, model in ZombiesFolder:GetChildren() do
+		local valid, rootPart = ValidateZombie(model)
+		if not valid then
 			continue
 		end
-
+		
+		if ShouldPreferZombie(model) then
+			closestModel = model
+			break
+		end
+		
 		local magnitude = (rootPart.Position - localRoot.Position).Magnitude
 
 		if shortestDistance and magnitude > shortestDistance then
@@ -133,9 +170,55 @@ local function GetClosestZombie()
 end
 
 local function UpdateESPHighlights()
-    for _, highlight in CoreGui.RuntimeObjects.Zombie:GetChildren() do
-        highlight.Enabled = ESP_Zombie
-    end
+	for _, highlight in CoreGui.RuntimeObjects.Zombie:GetChildren() do
+		highlight.Enabled = ESP_Zombie
+	end
+end
+
+local function ConvertKeybindToEnum(keybind: string)
+	local input = keybind:lower()
+
+	local userInputTypeMap = {
+		mousebutton1 = Enum.UserInputType.MouseButton1,
+		mousebutton2 = Enum.UserInputType.MouseButton2,
+		mousebutton3 = Enum.UserInputType.MouseButton3,
+		touch = Enum.UserInputType.Touch,
+		keyboard = Enum.UserInputType.Keyboard,
+		gamepad1 = Enum.UserInputType.Gamepad1,
+		gamepad2 = Enum.UserInputType.Gamepad2,
+		gamepad3 = Enum.UserInputType.Gamepad3,
+		gamepad4 = Enum.UserInputType.Gamepad4,
+		gamepad5 = Enum.UserInputType.Gamepad5,
+		gamepad6 = Enum.UserInputType.Gamepad6,
+		gamepad7 = Enum.UserInputType.Gamepad7,
+		gamepad8 = Enum.UserInputType.Gamepad8,
+	}
+
+	if userInputTypeMap[input] then
+		return userInputTypeMap[input]
+	end
+
+	for _, keyCode in Enum.KeyCode:GetEnumItems() do
+		if keyCode.Name:lower() == input then
+			return keyCode
+		end
+	end
+
+	return nil
+end
+
+local function ConvertWeaponNameToActualName(name)
+	local inputName = name:lower():gsub("%s+", "")
+
+	for _, tool in ToolStorage:GetChildren() do
+		local toolName = tool.Name:lower():gsub("%s+", "")
+
+		if toolName == inputName then
+			return tool.Name
+		end
+	end
+
+	return nil
 end
 
 -- [Functional] --
@@ -146,7 +229,7 @@ local function Run_KillAura_Melee()
 		return
 	end
 
-	local zombieModel, zombieHead = GetClosestZombie()
+	local zombieModel, zombieHead = GetClosestZombie(false)
 	if not zombieModel then
 		return
 	end
@@ -290,16 +373,40 @@ local function Run_KillAura_Melee()
 end
 
 local function Run_Aimbot_AimAssist()
-	if not aiming then
+	if not isAiming then
 		return
 	end
 
-	local zombieModel, zombieHead = GetClosestZombie()
+	local localCharacter, localRoot = GetLocalCharacter()
+	if not localCharacter then
+		return
+	end
+
+	local head = localCharacter:FindFirstChild("Head")
+	if not head then
+		return
+	end
+
+	local distanceToHead = (CurrentCamera.CFrame.Position - head.Position).Magnitude
+	if distanceToHead > 1 then
+		return
+	end
+
+	local zombieModel, zombieHead = GetClosestZombie(true)
 	if not zombieModel then
 		return
 	end
 
-	CurrentCamera.CFrame = CFrame.new(CurrentCamera.CFrame.Position, zombieHead.Position)
+	local targetPosition = zombieHead.Position
+
+	if zombieHead.Transparency == 1 then
+		local rootPart = zombieModel:FindFirstChild("HumanoidRootPart")
+		if rootPart then
+			targetPosition = rootPart.Position
+		end
+	end
+
+	CurrentCamera.CFrame = CFrame.new(CurrentCamera.CFrame.Position, targetPosition)
 end
 
 local function Run_Farm_Melee()
@@ -318,7 +425,7 @@ local function Run_Farm_Melee()
 	if humanoid.Health <= 0 then
 		return
 	end
-	
+
 	local camDistance = (CurrentCamera.CFrame.Position - localCharacter.Head.Position).Magnitude
 	if camDistance > 50 then
 		return
@@ -420,14 +527,17 @@ local function Run_Combat_InfiniteAmmoResell()
 
 	SellWeaponEvent:FireServer(toolName)
 	RunService.Heartbeat:Wait()
+	RunService.Heartbeat:Wait()
 
 	BuyWeaponEvent:FireServer(toolName)
+	RunService.Heartbeat:Wait()
+	RunService.Heartbeat:Wait()
 	RunService.Heartbeat:Wait()
 
 	isReselling = false
 end
 
-local function UpdateWeaponSpread(tool, toggle)
+local function UpdateBulletSpread(tool)
 	local currentValues = tool:FindFirstChild("CurrentValues")
 	local defaultValues = tool:FindFirstChild("DefaultValues")
 
@@ -435,38 +545,47 @@ local function UpdateWeaponSpread(tool, toggle)
 		return
 	end	
 
-	currentValues.Spread.Value = if toggle then defaultValues.Spread.Value else 0
-	currentValues.SpreadDecrease.Value = if toggle then defaultValues.SpreadDecrease.Value else 0
-	currentValues.SpreadIncrease.Value = if toggle then defaultValues.SpreadIncrease.Value else 0
-	currentValues.SpreadMax.Value = if toggle then defaultValues.SpreadMax.Value else 0
+	local isGun = defaultValues:FindFirstChild("Spread")
+	if not isGun then
+		return
+	end
 
-	currentValues.ZoomSpread.Value = if toggle then defaultValues.ZoomSpread.Value else 0
-	currentValues.ZoomSpreadDecrease.Value = if toggle then defaultValues.ZoomSpreadDecrease.Value else 0
-	currentValues.ZoomSpreadIncrease.Value = if toggle then defaultValues.ZoomSpreadIncrease.Value else 0
-	currentValues.ZoomSpreadMax.Value = if toggle then defaultValues.ZoomSpreadMax.Value else 0
+	local multipler = Combat_ChangeSpread / 100
+
+	local success = pcall(function()
+		currentValues.Spread.Value = defaultValues.Spread.Value * multipler
+		currentValues.SpreadDecrease.Value = defaultValues.SpreadDecrease.Value * multipler
+		currentValues.SpreadIncrease.Value = defaultValues.SpreadIncrease.Value * multipler
+		currentValues.SpreadMax.Value = defaultValues.SpreadMax.Value * multipler
+
+		currentValues.ZoomSpread.Value = defaultValues.ZoomSpread.Value * multipler
+		currentValues.ZoomSpreadDecrease.Value = defaultValues.ZoomSpreadDecrease.Value * multipler
+		currentValues.ZoomSpreadIncrease.Value = defaultValues.ZoomSpreadIncrease.Value * multipler
+		currentValues.ZoomSpreadMax.Value = defaultValues.ZoomSpreadMax.Value * multipler
+	end)
 end
 
-local function Run_Combat_NoWeaponSpread(toggle)
+local function Run_Combat_BulletSpread()
 	local localCharacter, localRoot = GetLocalCharacter()
 	if not localCharacter then
 		return
 	end
 
 	for _, tool in Backpack:GetChildren() do
-		UpdateWeaponSpread(tool, toggle)
+		UpdateBulletSpread(tool)
 	end
-	
+
 	for _, tool in localCharacter:GetChildren() do
 		if not tool:IsA("Tool") then
 			continue
 		end
 
-		UpdateWeaponSpread(tool, toggle)
+		UpdateBulletSpread(tool)
 	end
-end
 
-local function ActivateAntiAFK()
-	keypress(75)
+	for _, tool in ToolStorage:GetChildren() do
+		UpdateBulletSpread(tool)
+	end
 end
 
 local function SafelyRefillArmor()
@@ -495,36 +614,59 @@ end
 -- [[Default]] --
 
 local function OnInputBegan(input, processed)
-	if input.UserInputType == settings.aimKeybind then
-		aiming = true
+	local aimKey = (if Combat_AimKeybind ~= "" then Combat_AimKeybind else nil) or Enum.UserInputType.MouseButton2
+
+	if input.UserInputType == aimKey or input.KeyCode == aimKey then
+		isAiming = true
 	end
 end
 
 local function OnInputEnded(input, processed)
-	if input.UserInputType == settings.aimKeybind then
-		aiming = false
+	local aimKey = (if Combat_AimKeybind ~= "" then Combat_AimKeybind else nil) or Enum.UserInputType.MouseButton2
+
+	if input.UserInputType == aimKey or input.KeyCode == aimKey then
+		isAiming = false
 	end
 end
 
 local function SetupESP()
-    local folder_main = Instance.new("Folder")
-    folder_main.Name = "RuntimeObjects"
-    folder_main.Parent = CoreGui
-    
-    local folder_zombie = Instance.new("Folder")
-    folder_zombie.Name = "Zombie"
-    folder_zombie.Parent = folder_main
+	local oldFolder = CoreGui:FindFirstChild("RuntimeObjects")
+	if oldFolder then
+		oldFolder:Destroy()
+	end
 
-    local function OnChildAdded(model)
-        local highlight = Instance.new("Highlight")
-        highlight.FillTransparency = 1
-        highlight.OutlineColor = Color3.new(1, 1, 1)
-        highlight.Enabled = ESP_Zombie
-        highlight.Adornee = model
-        highlight.Parent = folder_zombie
-    end
-    
-    workspace.Zombies.ChildAdded:Connect(OnChildAdded)
+	local folder_main = Instance.new("Folder")
+	folder_main.Name = "RuntimeObjects"
+	folder_main.Parent = CoreGui
+
+	local folder_zombie = Instance.new("Folder")
+	folder_zombie.Name = "Zombie"
+	folder_zombie.Parent = folder_main
+
+	local function CreateHighlight(model)
+		if not folder_main then
+			return
+		end
+
+		local highlight = Instance.new("Highlight")
+		highlight.FillTransparency = 1
+		highlight.OutlineColor = Color3.new(1, 1, 1)
+		highlight.Enabled = ESP_Zombie
+		highlight.Adornee = model
+		highlight.Parent = folder_zombie
+
+		model.Destroying:Connect(function()
+			highlight:Destroy()
+		end)
+	end
+
+	if ZombiesFolder then
+		ZombiesFolder.ChildAdded:Connect(CreateHighlight)
+
+		for _, child in ZombiesFolder:GetChildren() do
+			CreateHighlight(child)
+		end
+	end
 end
 
 -- Elements
@@ -556,17 +698,68 @@ local Section_Combat_Aiming = Tab_Combat:Section({
 
 Section_Combat_Aiming:Toggle({
 	Text = "Enabled",
-	Tooltip = "Locks camera towards the nearest zombie. (Keybind: M2)",
+	Tooltip = "Locks camera towards the nearest zombie. (First-person only)",
 	Callback = function(Value)
 		Combat_AimAssist = Value
 
 		if Value then
-			RunService:BindToRenderStep("Aimbot_AimAssist", Enum.RenderPriority.Last.Value, Run_Aimbot_AimAssist)
+			RunService:BindToRenderStep("Aimbot_AimAssist", Enum.RenderPriority.Camera.Value + 10, Run_Aimbot_AimAssist)
 		else
 			RunService:UnbindFromRenderStep("Aimbot_AimAssist")
+
+			isAiming = false
 		end
 	end
 })
+
+Section_Combat_Aiming:Toggle({
+	Text = "Boss Priority",
+	Tooltip = "Should the 'aim assist' prefer the boss?",
+	Callback = function(Value)
+		Combat_PriorityBoss = Value
+	end
+})
+
+Section_Combat_Aiming:Input({
+	Text = "Keybind",
+	Tooltip = "What keybind to activate 'aim assist'?",
+	Placeholder = "MouseButton2",
+	Callback = function(Value)
+		Combat_AimKeybind = ConvertKeybindToEnum(Value) or ""
+	end
+})
+
+--- [[[]]] ---
+
+local Section_Combat_Weapon = Tab_Combat:Section({
+	Text = "Weapon Config",
+	Side = "Left"
+})
+
+Section_Combat_Weapon:Toggle({
+	Text = "Empty Magazine Sell",
+	Tooltip = "When your weapon runs out of ammo, sell it, then purchase it. (REQUIRES the BARGAINER perk at level 4 for guns other than pistol.)",
+	Callback = function(Value)
+		if Value then
+			RunService:BindToRenderStep("Combat_InfiniteAmmoResell", Enum.RenderPriority.Last.Value, Run_Combat_InfiniteAmmoResell)
+		else
+			RunService:UnbindFromRenderStep("Combat_InfiniteAmmoResell")
+		end
+	end
+})
+
+Section_Combat_Weapon:Slider({
+	Text = "Bullet Spread",
+	Postfix = "%",
+	Default = 100,
+	Minimum = 0,
+	Maximum = 200,
+	Callback = function(Value)
+		Combat_ChangeSpread = Value
+	end
+})
+
+--- [[[]]] ---
 
 local Section_Combat_MeleeKillAura = Tab_Combat:Section({
 	Text = "Killaura",
@@ -587,41 +780,6 @@ Section_Combat_MeleeKillAura:Toggle({
 	end
 })
 
-local Section_Combat_Weapon = Tab_Combat:Section({
-	Text = "Weapon Config",
-	Side = "Left"
-})
-
-Section_Combat_Weapon:Toggle({
-	Text = "Empty Magazine Sell",
-	Tooltip = "When your weapon runs out of ammo, sell it, then purchase it. (REQUIRES the BARGAINER perk at level 4 for guns other than pistol.)",
-	Callback = function(Value)
-		if Value then
-			RunService:BindToRenderStep("Combat_InfiniteAmmoResell", Enum.RenderPriority.Last.Value, Run_Combat_InfiniteAmmoResell)
-		else
-			RunService:UnbindFromRenderStep("Combat_InfiniteAmmoResell")
-		end
-	end
-})
-
-Section_Combat_Weapon:Toggle({
-	Text = "No Bullet Spread",
-	Tooltip = "Grants the weapon absolute accuracy. (MUST BE APPLIED BEFORE EQUIPPING, DOES NOT AFFECT MAX BULLET RANGE)",
-	Callback = function(Value)
-		Combat_NoSpread = Value
-		
-		if Value then
-			RunService:BindToRenderStep("Combat_NoWeaponSpread", Enum.RenderPriority.Last.Value, function()
-				Run_Combat_NoWeaponSpread(false)
-			end)
-		else
-			RunService:UnbindFromRenderStep("Combat_NoWeaponSpread")
-
-			Run_Combat_NoWeaponSpread(true)
-		end
-	end
-})
-
 --- [[[]]] ---
 
 local Section_ESP_Zombie = Tab_ESP:Section({
@@ -635,7 +793,7 @@ Section_ESP_Zombie:Toggle({
 	Callback = function(Value)
 		ESP_Zombie = Value
 
-        UpdateESPHighlights()
+		UpdateESPHighlights()
 	end
 })
 
@@ -648,7 +806,7 @@ local Section_Farm_Melee = Tab_Farm:Section({
 
 Section_Farm_Melee:Toggle({
 	Text = "Enabled",
-	Tooltip = [[("Killaura" must be enabled.)]],
+	Tooltip = "('Killaura' must be enabled.)",
 	Callback = function(Value)
 		if Value then
 			RunService:BindToRenderStep("Farm_Melee", Enum.RenderPriority.Last.Value, Run_Farm_Melee)
@@ -658,27 +816,30 @@ Section_Farm_Melee:Toggle({
 	end
 })
 
-local Section_Farm_Settings = Tab_Farm:Section({
-	Text = "Settings",
-	Side = "Right"
-})
-
-Section_Farm_Settings:Toggle({
-	Text = "Melee Upgrades",
+Section_Farm_Melee:Toggle({
+	Text = "Purchase Upgrades",
 	Tooltip = "Purchase melee upgrades when possible. (Will attempt to max.)",
 	Callback = function(Value)
 		Farm_MeleeUpgrades = Value
 	end
 })
 
+local Section_Farm_Settings = Tab_Farm:Section({
+	Text = "Settings",
+	Side = "Right"
+})
+
 Section_Farm_Settings:Toggle({
 	Text = "Anti-AFK",
-	Tooltip = "Prevents you from being kicked for idle-status.",
+	Tooltip = "Prevents you from being kicked for idle-status. (Window can be minimized)",
 	Callback = function(Value)
 		if Value then
-			RunService:BindToRenderStep("ActivateAntiAFK", Enum.RenderPriority.Last.Value, ActivateAntiAFK)
+			connection_AntiAFK = Players.LocalPlayer.Idled:Connect(function()
+				VirtualUser:ClickButton2(Vector2.new(0, 0))
+			end)
 		else
-			RunService:UnbindFromRenderStep("ActivateAntiAFK")
+			connection_AntiAFK:Disconnect()
+			connection_AntiAFK = nil
 		end
 	end
 })
@@ -743,11 +904,30 @@ Section_Shop_Purchase:Dropdown({
 	end
 })
 
+Section_Shop_Purchase:Input({
+	Text = "Weapon",
+	Tooltip = "Override the selected weapon.",
+	Placeholder = "Selecting from list.",
+	Callback = function(Value)
+		Shop_OverridePurchase = Value
+	end
+})
+
 Section_Shop_Purchase:Button({
 	Text = "Complete Transaction",
 	Tooltip = "Purchase the specified weapon. (Can be used outside during an active wave.)",
 	Callback = function(Value)
-		BuyWeaponEvent:FireServer(Shop_Purchase)
+		local finalChoice = Shop_OverridePurchase
+
+		if not finalChoice or finalChoice == "" then
+			finalChoice = Shop_Purchase
+		end
+
+		finalChoice = ConvertWeaponNameToActualName(finalChoice)
+
+		if finalChoice then
+			BuyWeaponEvent:FireServer(finalChoice)
+		end
 	end
 })
 
@@ -764,11 +944,30 @@ Section_Shop_Sell:Dropdown({
 	end
 })
 
+Section_Shop_Sell:Input({
+	Text = "Weapon",
+	Tooltip = "Override the selected weapon.",
+	Placeholder = "Selecting from list.",
+	Callback = function(Value)
+		Shop_OverrideSell = Value
+	end
+})
+
 Section_Shop_Sell:Button({
 	Text = "Complete Transaction",
 	Tooltip = "Sell the specified weapon. (Can be used outside during an active wave.)",
 	Callback = function(Value)
-		SellWeaponEvent:FireServer(Shop_Sell)
+		local finalChoice = Shop_OverrideSell
+
+		if not finalChoice or finalChoice == "" then
+			finalChoice = Shop_Sell
+		end
+
+		finalChoice = ConvertWeaponNameToActualName(finalChoice)
+
+		if finalChoice then
+			SellWeaponEvent:FireServer(finalChoice)
+		end
 	end
 })
 
@@ -778,3 +977,8 @@ UserInputService.InputBegan:Connect(OnInputBegan)
 UserInputService.InputEnded:Connect(OnInputEnded)
 
 SetupESP()
+
+RunService:UnbindFromRenderStep("Combat_BulletSpread")
+RunService:BindToRenderStep("Combat_BulletSpread", Enum.RenderPriority.Last.Value, function()
+	Run_Combat_BulletSpread()
+end)
