@@ -4,7 +4,7 @@ local Library = loadstring(game:HttpGet('https://raw.githubusercontent.com/dgths
 local Flags = Library.Flags
 
 local Window = Library:Window({
-	Text = "The Final Menu (v1)"
+	Text = "The Final Menu (v1.0.2)"
 })
 
 -- Services
@@ -32,11 +32,13 @@ local VoteSkipFunction = RemoteFunctions:FindFirstChild("VoteSkip")
 -- Variables
 
 local LocalPlayer = Players.LocalPlayer
+local PlayerGui = LocalPlayer.PlayerGui
 local Backpack = LocalPlayer.Backpack
 local CurrentCamera = workspace.CurrentCamera
 
+local PlayerPerks = LocalPlayer:FindFirstChild("PlayerPerks")
+
 local Map = workspace:FindFirstChild("Map")
-local Shop = Map:FindFirstChild("Shop")
 
 local ToolStorage = ReplicatedStorage:FindFirstChild("Tools")
 local ZombiesFolder = workspace:FindFirstChild("Zombies")
@@ -50,6 +52,7 @@ local Combat_AimAssist = false
 local Combat_AimKeybind = nil
 local Combat_ChangeSpread = nil
 local Combat_PriorityBoss = false
+local Combat_PriorityHunter = false
 
 local ESP_Zombie = false
 
@@ -69,6 +72,12 @@ local weaponList = {}
 local frameCounter = 0
 
 local connection_AntiAFK = nil
+
+local highlightColors = {
+	["Boss"] = Color3.fromRGB(0, 0, 255),
+	["Hunter"] = Color3.fromRGB(255, 0, 0),
+	["Undefined"] = Color3.fromRGB(255, 255, 255),
+}
 
 -- Required Checks
 
@@ -97,6 +106,25 @@ local function GetLocalCharacter()
 	return localCharacter, localRoot
 end
 
+local function GetCurrentGun()
+	local localCharacter, localRoot = GetLocalCharacter()
+	if not localCharacter then
+		return
+	end
+
+	local tool = localCharacter:FindFirstChildWhichIsA("Tool")
+	if not tool then
+		return
+	end
+
+	local currentValues = tool:FindFirstChild("CurrentValues")
+	if not currentValues then
+		return
+	end
+
+	return tool, currentValues
+end
+
 local function GetClosestZombie(usePriority)
 	if not ZombiesFolder then
 		return
@@ -107,8 +135,20 @@ local function GetClosestZombie(usePriority)
 		return
 	end
 
-	local closestModel = nil
-	local shortestDistance = nil
+	local bestModel = nil
+	local bestHead = nil
+	local bestPriority = nil
+	local bestDistance = nil
+
+	local function IsWithinShootRange(rootPart, maxRange)
+		local magnitude = (rootPart.Position - localRoot.Position).Magnitude
+
+		if magnitude > maxRange then
+			return false
+		end
+
+		return true
+	end
 
 	local function ValidateZombie(model)
 		local humanoid = model:FindFirstChild("Zombie")
@@ -129,49 +169,75 @@ local function GetClosestZombie(usePriority)
 		if not head then
 			return
 		end
-		
-		return true, rootPart
-	end
-	
-	local function ShouldPreferZombie(model)
-		if not usePriority then
-			return
-		end
-		
-		if Combat_PriorityBoss then
-			if model.Name == "Boss" then
-				return true
+
+		local currentGun, currentValues = GetCurrentGun()
+		if currentGun then
+			if not IsWithinShootRange(rootPart, currentValues.Range.Value) then
+				return
 			end
+		end
+
+		return true, rootPart, head
+	end
+
+	local function GetZombiePriority(model)
+		if model.Name == "Hunter" and Combat_PriorityHunter then
+			return 2
+		elseif model.Name == "Boss" and Combat_PriorityBoss then
+			return 1
+		else
+			return 0
 		end
 	end
 
 	for _, model in ZombiesFolder:GetChildren() do
-		local valid, rootPart = ValidateZombie(model)
+		local valid, rootPart, head = ValidateZombie(model)
 		if not valid then
 			continue
 		end
-		
-		if ShouldPreferZombie(model) then
-			closestModel = model
-			break
-		end
-		
-		local magnitude = (rootPart.Position - localRoot.Position).Magnitude
 
-		if shortestDistance and magnitude > shortestDistance then
+		if model:FindFirstChildWhichIsA("ForceField") then
 			continue
 		end
 
-		closestModel = model
-		shortestDistance = magnitude
+		local magnitude = (rootPart.Position - localRoot.Position).Magnitude
+		local priority = usePriority and GetZombiePriority(model) or 0
+
+		if bestModel == nil
+			or priority > bestPriority
+			or (priority == bestPriority and magnitude < bestDistance)
+		then
+			bestModel = model
+			bestHead = head
+			bestPriority = priority
+			bestDistance = magnitude
+		end
 	end
 
-	return closestModel, if closestModel then closestModel:FindFirstChild("Head") else nil
+	return bestModel, bestHead
 end
 
 local function UpdateESPHighlights()
-	for _, highlight in CoreGui.RuntimeObjects.Zombie:GetChildren() do
-		highlight.Enabled = ESP_Zombie
+	local zombieFolder = CoreGui:FindFirstChild("RuntimeObjects")
+	if not zombieFolder then
+		return
+	end
+
+	local zombieSubFolder = zombieFolder:FindFirstChild("Zombie")
+	if not zombieSubFolder then
+		return
+	end
+
+	for _, categoryFolder in zombieSubFolder:GetChildren() do
+		for _, highlight in categoryFolder:GetChildren() do
+			if highlight:IsA("Highlight") then
+				if ESP_IgnoreNonSpecial then
+					highlight.Enabled = ESP_Zombie and categoryFolder.Name == "Special"
+				else
+					highlight.Enabled = ESP_Zombie
+				end
+			end
+		end
 	end
 end
 
@@ -219,6 +285,23 @@ local function ConvertWeaponNameToActualName(name)
 	end
 
 	return nil
+end
+
+local function RemoveOldReticle()
+	local ScreenGui = PlayerGui:FindFirstChild("ScreenGui")
+	if not ScreenGui then
+		return
+	end
+
+	local overlaysFrame = ScreenGui:FindFirstChild("Overlays")
+	if not overlaysFrame then
+		return
+	end
+
+	local reticle = overlaysFrame:FindFirstChild("Reticle")
+	if reticle then
+		reticle:Destroy()
+	end
 end
 
 -- [Functional] --
@@ -472,10 +555,6 @@ local function Run_Farm_Melee()
 		localCharacter:SetAttribute("Roblox3", true)
 	end
 
-	if LocalPlayer.Voted.Value == false then
-		VoteSkipFunction:InvokeServer()
-	end
-
 	if frameCounter >= 10 then
 		frameCounter = 0
 
@@ -490,6 +569,11 @@ local function Run_Farm_Melee()
 end
 
 local function Run_Combat_InfiniteAmmoResell()
+	local currentGun = GetCurrentGun()
+	if not currentGun then
+		RemoveOldReticle()
+	end
+	
 	if isReselling then
 		return
 	end
@@ -509,12 +593,28 @@ local function Run_Combat_InfiniteAmmoResell()
 		return
 	end
 
+	if foundTool.Name ~= "Pistol" then
+		local bargainerPerk = PlayerPerks:FindFirstChild("SellValue")
+		if not bargainerPerk then
+			return
+		end
+
+		if bargainerPerk.PerkLevel.Value < 4 then
+			return
+		end
+	end
+
 	local currentValues = foundTool:FindFirstChild("CurrentValues")
 	if not currentValues then
 		return
 	end
 
-	if currentValues.Clip.Value > 0 then
+	local clipValue = currentValues:FindFirstChild("Clip")
+	if not clipValue then
+		return
+	end
+
+	if clipValue.Value > 0 then
 		return
 	end
 
@@ -643,6 +743,14 @@ local function SetupESP()
 	folder_zombie.Name = "Zombie"
 	folder_zombie.Parent = folder_main
 
+	local folder_default = Instance.new("Folder")
+	folder_default.Name = "Default"
+	folder_default.Parent = folder_zombie
+
+	local folder_special = Instance.new("Folder")
+	folder_special.Name = "Special"
+	folder_special.Parent = folder_zombie
+
 	local function CreateHighlight(model)
 		if not folder_main then
 			return
@@ -650,13 +758,21 @@ local function SetupESP()
 
 		local highlight = Instance.new("Highlight")
 		highlight.FillTransparency = 1
-		highlight.OutlineColor = Color3.new(1, 1, 1)
+		highlight.OutlineColor = highlightColors[model.Name] or highlightColors.Undefined
 		highlight.Enabled = ESP_Zombie
+
+		if model.Name == "Zombie" then
+			highlight.Parent = folder_default
+		else
+			highlight.Parent = folder_special
+		end
+
 		highlight.Adornee = model
-		highlight.Parent = folder_zombie
 
 		model.Destroying:Connect(function()
-			highlight:Destroy()
+			if highlight then
+				highlight:Destroy()
+			end
 		end)
 	end
 
@@ -667,6 +783,40 @@ local function SetupESP()
 			CreateHighlight(child)
 		end
 	end
+end
+
+local function UpdateBarricadeSFX(toggle)
+	local upgrades = Map:FindFirstChild("Upgrades")
+	if not upgrades then
+		return
+	end
+	
+	local barricade = upgrades:FindFirstChild("Barricade")
+	if not barricade then
+		return
+	end
+	
+	local destruction = barricade:FindFirstChild("Destruction")
+	if not destruction then
+		return
+	end
+	
+	local barbedWire = destruction:FindFirstChild("BarbedWire")
+	if not barbedWire then
+		return
+	end
+	
+	local wireSFX = barbedWire:FindFirstChild("WireSFX")
+	if not wireSFX then
+		return
+	end
+	
+	local idleSound = wireSFX:FindFirstChild("IdleSound")
+	if not idleSound then
+		return
+	end
+
+	idleSound.Volume = if toggle then 0.6 else 0
 end
 
 -- Elements
@@ -681,12 +831,20 @@ local Tab_Shop = Window:Tab({
 	Text = "Shop"
 })
 
+local Tab_Game = Window:Tab({
+	Text = "Game"
+})
+
 local Tab_ESP = Window:Tab({
 	Text = "ESP"
 })
 
 local Tab_Farm = Window:Tab({
 	Text = "Farm"
+})
+
+local Tab_Extra = Window:Tab({
+	Text = "Extra"
 })
 
 -- [Main] --
@@ -696,7 +854,7 @@ local Section_Combat_Aiming = Tab_Combat:Section({
 	Side = "Left"
 })
 
-Section_Combat_Aiming:Toggle({
+local Toggle_AimAssistEnabled = Section_Combat_Aiming:Toggle({
 	Text = "Enabled",
 	Tooltip = "Locks camera towards the nearest zombie. (First-person only)",
 	Callback = function(Value)
@@ -713,8 +871,16 @@ Section_Combat_Aiming:Toggle({
 })
 
 Section_Combat_Aiming:Toggle({
+	Text = "Hunter Priority",
+	Tooltip = "Should the 'aim assist' prefer the hunter? (Over boss)",
+	Callback = function(Value)
+		Combat_PriorityHunter = Value
+	end
+})
+
+Section_Combat_Aiming:Toggle({
 	Text = "Boss Priority",
-	Tooltip = "Should the 'aim assist' prefer the boss?",
+	Tooltip = "Should the 'aim assist' prefer the boss? (Below hunter)",
 	Callback = function(Value)
 		Combat_PriorityBoss = Value
 	end
@@ -729,7 +895,14 @@ Section_Combat_Aiming:Input({
 	end
 })
 
---- [[[]]] ---
+Section_Combat_Aiming:Keybind({
+	Text = "Toggle Status",
+	Tooltip = "Toggle the status of 'Aim Assist'.",
+	Default = Enum.KeyCode.F,
+	Callback = function(Value)
+		Toggle_AimAssistEnabled:Set(not Combat_AimAssist)
+	end
+})
 
 local Section_Combat_Weapon = Tab_Combat:Section({
 	Text = "Weapon Config",
@@ -758,8 +931,6 @@ Section_Combat_Weapon:Slider({
 		Combat_ChangeSpread = Value
 	end
 })
-
---- [[[]]] ---
 
 local Section_Combat_MeleeKillAura = Tab_Combat:Section({
 	Text = "Killaura",
@@ -797,6 +968,16 @@ Section_ESP_Zombie:Toggle({
 	end
 })
 
+Section_ESP_Zombie:Toggle({
+	Text = "Ignore Non-Special",
+	Tooltip = "Should only special zombies be highlighted?",
+	Callback = function(Value)
+		ESP_IgnoreNonSpecial = Value
+
+		UpdateESPHighlights()
+	end
+})
+
 --- [[[]]] ---
 
 local Section_Farm_Melee = Tab_Farm:Section({
@@ -806,7 +987,7 @@ local Section_Farm_Melee = Tab_Farm:Section({
 
 Section_Farm_Melee:Toggle({
 	Text = "Enabled",
-	Tooltip = "('Killaura' must be enabled.)",
+	Tooltip = "(Be sure to enable other auto-related things. ex. Ready Up, Killaura)",
 	Callback = function(Value)
 		if Value then
 			RunService:BindToRenderStep("Farm_Melee", Enum.RenderPriority.Last.Value, Run_Farm_Melee)
@@ -846,12 +1027,12 @@ Section_Farm_Settings:Toggle({
 
 --- [[[]]] ---
 
-local Section_Shop_Refill = Tab_Shop:Section({
+local Section_Shop_QuickRefill = Tab_Shop:Section({
 	Text = "Quick Refill",
 	Side = "Left"
 })
 
-Section_Shop_Refill:Button({
+Section_Shop_QuickRefill:Button({
 	Text = "Armor",
 	Tooltip = "Refill body armor. (Cannot be used outside during an active wave.)",
 	Callback = function(Value)
@@ -859,7 +1040,7 @@ Section_Shop_Refill:Button({
 	end
 })
 
-Section_Shop_Refill:Button({
+Section_Shop_QuickRefill:Button({
 	Text = "Shop",
 	Tooltip = "Refill shop health. (Cannot be used outside during an active wave.)",
 	Callback = function(Value)
@@ -867,7 +1048,7 @@ Section_Shop_Refill:Button({
 	end
 })
 
-Section_Shop_Refill:Button({
+Section_Shop_QuickRefill:Button({
 	Text = "Barricade",
 	Tooltip = "Refill barricade health. (Cannot be used outside during an active wave.)",
 	Callback = function(Value)
@@ -875,7 +1056,7 @@ Section_Shop_Refill:Button({
 	end
 })
 
-Section_Shop_Refill:Button({
+Section_Shop_QuickRefill:Button({
 	Text = "Ammo Box",
 	Tooltip = "Refill ammo box. (Cannot be used outside during an active wave.)",
 	Callback = function(Value)
@@ -883,11 +1064,84 @@ Section_Shop_Refill:Button({
 	end
 })
 
-Section_Shop_Refill:Button({
+Section_Shop_QuickRefill:Button({
 	Text = "Ladder Ammo Box",
 	Tooltip = "Refill roof ammo box. (Cannot be used outside during an active wave.)",
 	Callback = function(Value)
 		SellRepairEvent:FireServer("Ladders")
+	end
+})
+
+local Section_Shop_AutoRefill = Tab_Shop:Section({
+	Text = "Auto Refill",
+	Side = "Left"
+})
+
+Section_Shop_AutoRefill:Toggle({
+	Text = "Armor",
+	Tooltip = "Automatically Refill body armor. (Cannot be used outside during an active wave.)",
+	Callback = function(Value)
+		if Value then
+			RunService:BindToRenderStep("Shop_AutoRefill_Armor", Enum.RenderPriority.Last.Value, SafelyRefillArmor)
+		else
+			RunService:UnbindFromRenderStep("Shop_AutoRefill_Armor")
+		end
+	end
+})
+
+Section_Shop_AutoRefill:Toggle({
+	Text = "Shop",
+	Tooltip = "Automatically Refill shop health. (Cannot be used outside during an active wave.)",
+	Callback = function(Value)
+		if Value then
+			RunService:BindToRenderStep("Shop_AutoRefill_Shop", Enum.RenderPriority.Last.Value, function()
+				SellRepairEvent:FireServer("Shop")
+			end)
+		else
+			RunService:UnbindFromRenderStep("Shop_AutoRefill_Shop")
+		end
+	end
+})
+
+Section_Shop_AutoRefill:Toggle({
+	Text = "Barricade",
+	Tooltip = "Automatically Refill barricade health. (Cannot be used outside during an active wave.)",
+	Callback = function(Value)
+		if Value then
+			RunService:BindToRenderStep("Shop_AutoRefill_Barricade", Enum.RenderPriority.Last.Value, function()
+				SellRepairEvent:FireServer("Barricade")
+			end)
+		else
+			RunService:UnbindFromRenderStep("Shop_AutoRefill_Barricade")
+		end
+	end
+})
+
+Section_Shop_AutoRefill:Toggle({
+	Text = "Ammo Box",
+	Tooltip = "Automatically Refill ammo box. (Cannot be used outside during an active wave.)",
+	Callback = function(Value)
+		if Value then
+			RunService:BindToRenderStep("Shop_AutoRefill_AmmoBox", Enum.RenderPriority.Last.Value, function()
+				SellRepairEvent:FireServer("AmmoBox")
+			end)
+		else
+			RunService:UnbindFromRenderStep("Shop_AutoRefill_AmmoBox")
+		end
+	end
+})
+
+Section_Shop_AutoRefill:Toggle({
+	Text = "Ladder Ammo Box",
+	Tooltip = "Automatically Refill roof ammo box. (Cannot be used outside during an active wave.)",
+	Callback = function(Value)
+		if Value then
+			RunService:BindToRenderStep("Shop_AutoRefill_RoofAmmoBox", Enum.RenderPriority.Last.Value, function()
+				SellRepairEvent:FireServer("Ladders")
+			end)
+		else
+			RunService:UnbindFromRenderStep("Shop_AutoRefill_RoofAmmoBox")
+		end
 	end
 })
 
@@ -967,6 +1221,54 @@ Section_Shop_Sell:Button({
 
 		if finalChoice then
 			SellWeaponEvent:FireServer(finalChoice)
+		end
+	end
+})
+
+--- [[[]]] ---
+
+local Section_Game_Status = Tab_Game:Section({
+	Text = "Status",
+	Side = "Left"
+})
+
+Section_Game_Status:Toggle({
+	Text = "Auto Ready-Up",
+	Tooltip = "Automatically ready-up when possible.",
+	Callback = function(Value)
+		if Value then
+			RunService:BindToRenderStep("Game_AutoReady", Enum.RenderPriority.Last.Value, function()
+				if LocalPlayer.Voted.Value == true then
+					return
+				end
+
+				VoteSkipFunction:InvokeServer()
+			end)
+		else
+			RunService:UnbindFromRenderStep("Game_AutoReady")
+		end
+	end
+})
+
+--- [[[]]] ---
+
+local Section_Extra_Audio = Tab_Extra:Section({
+	Text = "Audio",
+	Side = "Left"
+})
+
+Section_Extra_Audio:Toggle({
+	Text = "Barricade Buzz",
+	Tooltip = "Remove the buzzing sound from the barricade's upgrades.",
+	Callback = function(Value)
+		if Value then
+			RunService:BindToRenderStep("Game_RemoveBarricadeBuzz", Enum.RenderPriority.Last.Value, function()
+				UpdateBarricadeSFX(false)
+			end)
+		else
+			RunService:UnbindFromRenderStep("Game_RemoveBarricadeBuzz")
+
+			UpdateBarricadeSFX(true)
 		end
 	end
 })
