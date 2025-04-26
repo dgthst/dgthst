@@ -140,7 +140,12 @@ local function GetClosestZombie(usePriority)
 	local bestPriority = nil
 	local bestDistance = nil
 
-	local function IsWithinShootRange(rootPart, maxRange)
+	local function IsWithinShootRange(rootPart, currentValues)
+		local rangeValue = currentValues:FindFirstChild("Range")
+		if not rangeValue then
+			return false
+		end
+
 		local magnitude = (rootPart.Position - localRoot.Position).Magnitude
 
 		if magnitude > maxRange then
@@ -172,7 +177,7 @@ local function GetClosestZombie(usePriority)
 
 		local currentGun, currentValues = GetCurrentGun()
 		if currentGun then
-			if not IsWithinShootRange(rootPart, currentValues.Range.Value) then
+			if not IsWithinShootRange(rootPart, currentValues) then
 				return
 			end
 		end
