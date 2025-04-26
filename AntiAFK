@@ -1,0 +1,14 @@
+-- Services
+
+local Players = game:GetService("Players")
+local VirtualUser = game:GetService("VirtualUser")
+
+-- Functions
+
+local function OnIdled()
+    VirtualUser:ClickButton2(Vector2.new(0, 0))
+end
+
+-- Runtime
+
+Players.LocalPlayer.Idled:Connect(OnIdled)
