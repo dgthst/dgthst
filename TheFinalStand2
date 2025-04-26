@@ -4,7 +4,7 @@ local Library = loadstring(game:HttpGet('https://raw.githubusercontent.com/dgths
 local Flags = Library.Flags
 
 local Window = Library:Window({
-	Text = "The Final Menu (v1.0.2)"
+	Text = "The Final Menu"
 })
 
 -- Services
@@ -819,6 +819,19 @@ local function UpdateBarricadeSFX(toggle)
 	idleSound.Volume = if toggle then 0.6 else 0
 end
 
+local function AttemptVoteSkip()
+	local votedValue = LocalPlayer:FindFirstChild("Voted")
+	if not votedValue then
+		return
+	end
+
+	if votedValue.Value == true then
+		return
+	end
+
+	VoteSkipFunction:InvokeServer()
+end
+
 -- Elements
 
 -- [Tabs] -- 
@@ -1237,13 +1250,7 @@ Section_Game_Status:Toggle({
 	Tooltip = "Automatically ready-up when possible.",
 	Callback = function(Value)
 		if Value then
-			RunService:BindToRenderStep("Game_AutoReady", Enum.RenderPriority.Last.Value, function()
-				if LocalPlayer.Voted.Value == true then
-					return
-				end
-
-				VoteSkipFunction:InvokeServer()
-			end)
+			RunService:BindToRenderStep("Game_AutoReady", Enum.RenderPriority.Last.Value, AttemptVoteSkip)
 		else
 			RunService:UnbindFromRenderStep("Game_AutoReady")
 		end
