@@ -255,7 +255,8 @@ local function GetClosestZombie(usePriority)
 
 		local magnitude = (rootPart.Position - localRoot.Position).Magnitude
 
-		if magnitude > rangeValue.Value then
+		local forgivenRange = 10
+		if magnitude > rangeValue.Value - forgivenRange then
 			return false
 		end
 
