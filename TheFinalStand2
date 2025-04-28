@@ -47,7 +47,6 @@ local ShopRegions = ReplicatedStorage:FindFirstChild("ShopRegions") or workspace
 local SpawnExit = ShopRegions:FindFirstChild("SpawnExit")
 local ShopExit = ShopRegions:FindFirstChild("ShopExit")
 
-local Combat_Killaura = false
 local Combat_AimAssist = false
 local Combat_AimKeybind = nil
 local Combat_AutoLock = false
@@ -60,8 +59,6 @@ local Combat_Healing = false
 local ESP_Zombie = false
 local ESP_Player = false
 
-local Farm_MeleeUpgrades = false
-
 local Shop_Purchase = nil
 local Shop_Sell = nil
 
@@ -71,11 +68,15 @@ local Shop_OverrideSell = nil
 local isAiming = false
 local isReselling = false
 local isConsuming = false
+local isEquipping = false
 local lockedOnZombie = false
 
-local weaponList = {}
+local lastUpgradedMelee = 0
+local lastAutoEquip = 0
 
-local frameCounter = 0
+local isRightClickHeld = false
+
+local weaponList = {}
 
 local connection_AntiAFK = nil
 
@@ -284,8 +285,10 @@ local function GetClosestZombie(usePriority)
 		local currentGun, currentValues = GetCurrentGun()
 		if currentGun then
 			if not IsWithinShootRange(rootPart, currentValues) then
-				return
+				return false
 			end
+		else
+			return false
 		end
 
 		return true, rootPart, head
@@ -436,9 +439,109 @@ local function ShortClick1()
 	mouse1release()
 end
 
+function SetRightClickDown(toggle)
+    if toggle and not isRightClickHeld then
+        mouse2press()
+        isRightClickHeld = true
+    elseif not toggle and isRightClickHeld then
+        mouse2release()
+        isRightClickHeld = false
+    end
+end
+
+local function SetCameraToFirstPerson()
+	local preZoomLevel = LocalPlayer.CameraMaxZoomDistance
+		
+	LocalPlayer.CameraMaxZoomDistance = 0.5
+	LocalPlayer.CameraMaxZoomDistance = preZoomLevel
+end
+
+local function GetDefaultFOV()
+    local current = PlayerGui
+    local path = {
+        "MenuGui",
+        "SettingsFrame",
+        "Settings",
+        "OptionsFrame",
+        "FieldOfView",
+        "Margins",
+        "Amount"
+    }
+
+    for _, name in ipairs(path) do
+        current = current:FindFirstChild(name)
+        if not current then
+            return
+        end
+    end
+
+    return tonumber(current.Text)
+end
+
+local function IsPlayerAiming()
+	local currentFOV = CurrentCamera.FieldOfView
+	local defaultFOV = GetDefaultFOV()
+
+	if not defaultFOV then
+		return
+	end
+
+	if currentFOV < defaultFOV then
+		return true
+	end
+
+	return false
+end
+
+local function PlayerIsAlive()
+	local localHumanoid = GetLocalHumanoid()
+	if not localHumanoid then
+		return
+	end
+
+	if localHumanoid.Health <= 0 then
+		return
+	end
+
+	if CurrentCamera.CameraSubject ~= localHumanoid then
+		return
+	end
+
+	return true
+end
+
+local function SetCameraHorizontal(targetPosition)
+	local currentPosition = CurrentCamera.CFrame.Position
+	targetPosition = Vector3.new(targetPosition.X, currentPosition.Y, targetPosition.Z)
+	CurrentCamera.CFrame = CFrame.new(currentPosition, targetPosition)
+end
+
+local function PlayerIsFirstPerson()
+	local localCharacter = GetLocalCharacter()
+	if not localCharacter then
+		return
+	end
+
+	local head = localCharacter:FindFirstChild("Head")
+	if not head then
+		return
+	end
+
+	local distanceToHead = (CurrentCamera.CFrame.Position - head.Position).Magnitude
+	if distanceToHead > 1 then
+		return
+	end
+
+	return true
+end
+
+local function HeartbeatWait()
+    RunService.Heartbeat:Wait()
+end
+
 -- [Functional] --
 
-local function Run_KillAura_Melee()
+local function Run_KillAura()
 	local localCharacter = GetLocalCharacter()
 	if not localCharacter then
 		return
@@ -594,18 +697,7 @@ local function Run_Aimbot_AimAssist()
 		return
 	end
 
-	local localCharacter = GetLocalCharacter()
-	if not localCharacter then
-		return
-	end
-
-	local head = localCharacter:FindFirstChild("Head")
-	if not head then
-		return
-	end
-
-	local distanceToHead = (CurrentCamera.CFrame.Position - head.Position).Magnitude
-	if distanceToHead > 1 then
+	if not PlayerIsFirstPerson() then
 		return
 	end
 
@@ -628,80 +720,176 @@ local function Run_Aimbot_AimAssist()
 	lockedOnZombie = true
 end
 
-local function Run_Farm_Melee()
-	frameCounter += 1
-
-	local localCharacter, localRoot = GetLocalCharacter()
-	if not localCharacter then
-		return
-	end
-
-	local humanoid = GetLocalHumanoid()
-	if not humanoid then
-		return
-	end
-
-	if humanoid.Health <= 0 then
-		return
-	end
-
-	local camDistance = (CurrentCamera.CFrame.Position - localCharacter.Head.Position).Magnitude
-	if camDistance > 50 then
-		return
-	end
-
+local function AutoMovement_Spawn(localCharacter, localRoot, humanoid)
 	if not localCharacter:GetAttribute("Roblox") then
-		CurrentCamera.CFrame = CFrame.new(CurrentCamera.CFrame.Position, SpawnExit.Position)
+		SetCameraHorizontal(SpawnExit.Position)
 
 		local calculation = (SpawnExit.Position - localRoot.Position)
 		if calculation.Magnitude > 3 then
 			humanoid:Move(calculation.Unit)
-			return
+			return true
 		end
 
 		localCharacter:SetAttribute("Roblox", true)
 
 		PlayerTeleportEvent:FireServer(localRoot.Position, 1)
-		localCharacter:TranslateBy(Vector3.new(0, 0.2, 8))
+		localCharacter:TranslateBy(Vector3.new(0, 0.2, 12))
 	end
+end
 
+local function AutoMovement_ShopCenter(localCharacter, localRoot, humanoid)
 	if not localCharacter:GetAttribute("Roblox2") then
 		local forwardCFrame = ShopExit.CFrame * CFrame.new(0, 0, -42)
-		CurrentCamera.CFrame = CFrame.new(CurrentCamera.CFrame.Position, forwardCFrame.Position)
+		SetCameraHorizontal(forwardCFrame.Position)
 
 		local calculation = (forwardCFrame.Position - localRoot.Position)
 		if calculation.Magnitude > 3 then
 			humanoid:Move(calculation.Unit)
-			return
+			return true
 		end
 
 		localCharacter:SetAttribute("Roblox2", true)
 	end
+end
 
+local function AutoMovement_ShopDoor(localCharacter, localRoot, humanoid)
 	if not localCharacter:GetAttribute("Roblox3") then
 		local forwardCFrame = ShopExit.CFrame * CFrame.new(0, 0, -1)
-		CurrentCamera.CFrame = CFrame.new(CurrentCamera.CFrame.Position, forwardCFrame.Position)
+		SetCameraHorizontal(forwardCFrame.Position)
 
 		local calculation = (forwardCFrame.Position - localRoot.Position)
 		if calculation.Magnitude > 3 then
 			humanoid:Move(calculation.Unit)
-			return
+			return true
 		end
 
 		localCharacter:SetAttribute("Roblox3", true)
 	end
+end
 
-	if frameCounter >= 10 then
-		frameCounter = 0
+local function AutoMovement_ShopOutside(localCharacter, localRoot, humanoid)
+	if not localCharacter:GetAttribute("Roblox4") then
+		local forwardCFrame = ShopExit.CFrame * CFrame.new(0, 0, 6)
+		SetCameraHorizontal(forwardCFrame.Position)
 
-		if Farm_MeleeUpgrades then
-			UpgradeStructurePlayerEvent:FireServer("Melee", "KillMoney")
-			UpgradeStructurePlayerEvent:FireServer("Melee", "AttackSpeed")
-			UpgradeStructurePlayerEvent:FireServer("Melee", "Damage")
-			UpgradeStructurePlayerEvent:FireServer("Melee", "Lifesteal")
-			UpgradeStructurePlayerEvent:FireServer("Melee", "WitherDamage")
+		local calculation = (forwardCFrame.Position - localRoot.Position)
+		if calculation.Magnitude > 3 then
+			humanoid:Move(calculation.Unit)
+			return true
 		end
+
+		localCharacter:SetAttribute("Roblox4", true)
 	end
+end
+
+local function Run_Farm_TypeA()
+	local localCharacter, localRoot = GetLocalCharacter()
+	if not localCharacter then
+		return
+	end
+
+	local localHumanoid = GetLocalHumanoid()
+	if not localHumanoid then
+		return
+	end
+
+	if not PlayerIsAlive() then
+		return
+	end
+
+	local moving = false
+
+	moving = AutoMovement_Spawn(localCharacter, localRoot, localHumanoid)
+	if moving then return end
+
+	moving = AutoMovement_ShopCenter(localCharacter, localRoot, localHumanoid)
+	if moving then return end
+
+	moving = AutoMovement_ShopDoor(localCharacter, localRoot, localHumanoid)
+	if moving then return end
+end
+
+local function Run_Farm_TypeB()
+	local localCharacter, localRoot = GetLocalCharacter()
+	if not localCharacter then
+		return
+	end
+
+	local localHumanoid = GetLocalHumanoid()
+	if not localHumanoid then
+		return
+	end
+
+	if not PlayerIsAlive() then
+		return
+	end
+
+	local moving = false
+
+	moving = AutoMovement_Spawn(localCharacter, localRoot, localHumanoid)
+	if moving then return end
+
+	moving = AutoMovement_ShopCenter(localCharacter, localRoot, localHumanoid)
+	if moving then return end
+
+	moving = AutoMovement_ShopDoor(localCharacter, localRoot, localHumanoid)
+	if moving then return end
+
+	moving = AutoMovement_ShopOutside(localCharacter, localRoot, localHumanoid)
+	if moving then return end
+
+	if not PlayerIsFirstPerson() then
+		SetCameraToFirstPerson()
+	end
+
+	if isEquipping then
+		return
+	end
+
+	local timeSinceLastEquip = (os.clock() - lastAutoEquip)
+	if timeSinceLastEquip < 1 then
+		return
+	end
+	
+	lastAutoEquip = os.clock()
+
+	local backpack = GetLocalBackpack()
+	if not backpack then
+		return
+	end
+
+	local foundPistol = localCharacter:FindFirstChild("Pistol")
+	if not foundPistol then
+		foundPistol = backpack:FindFirstChild("Pistol")
+		if foundPistol then
+			isEquipping = true
+
+			task.delay(0.2, function()
+				isEquipping = false
+			end)
+
+			localHumanoid:EquipTool(foundPistol)
+		else
+			BuyWeaponEvent:FireServer("Pistol")
+		end
+
+		return
+	end
+end
+
+local function Run_Upgrade_Melee()
+	local timeSinceLastUpgrade = (os.clock() - lastUpgradedMelee)
+	if timeSinceLastUpgrade < 0.5 then
+		return
+	end
+
+	lastUpgradedMelee = os.clock()
+
+	UpgradeStructurePlayerEvent:FireServer("Melee", "KillMoney")
+	UpgradeStructurePlayerEvent:FireServer("Melee", "AttackSpeed")
+	UpgradeStructurePlayerEvent:FireServer("Melee", "Damage")
+	UpgradeStructurePlayerEvent:FireServer("Melee", "Lifesteal")
+	UpgradeStructurePlayerEvent:FireServer("Melee", "WitherDamage")
 end
 
 local function Run_Combat_InfiniteAmmoResell()
@@ -922,15 +1110,6 @@ local function UpdateBarricadeSFX(toggle)
 end
 
 local function AttemptVoteSkip()
-	local votedValue = LocalPlayer:FindFirstChild("Voted")
-	if not votedValue then
-		return
-	end
-
-	if votedValue.Value == true then
-		return
-	end
-
 	VoteSkipFunction:InvokeServer()
 end
 
@@ -1240,7 +1419,7 @@ local Toggle_AimAssistEnabled = Section_Combat_Aiming:Toggle({
 	end
 })
 
-Section_Combat_Aiming:Toggle({
+local Section_Combat_Aiming_PriorityHunter = Section_Combat_Aiming:Toggle({
 	Text = "Hunter Priority",
 	Tooltip = "Should the 'aim assist' prefer the hunter? (Over boss)",
 	Callback = function(Value)
@@ -1248,7 +1427,7 @@ Section_Combat_Aiming:Toggle({
 	end
 })
 
-Section_Combat_Aiming:Toggle({
+local Section_Combat_Aiming_PriorityBoss = Section_Combat_Aiming:Toggle({
 	Text = "Boss Priority",
 	Tooltip = "Should the 'aim assist' prefer the boss? (Below hunter)",
 	Callback = function(Value)
@@ -1267,14 +1446,14 @@ Section_Combat_Aiming:Input({
 
 Section_Combat_Aiming:Keybind({
 	Text = "Toggle Status",
-	Tooltip = "Toggle the status of 'Aim Assist'.",
+	Tooltip = "Toggle the status of 'aim assist'.",
 	Default = Enum.KeyCode.C,
 	Callback = function(Value)
 		Toggle_AimAssistEnabled:Set(not Combat_AimAssist)
 	end
 })
 
-Section_Combat_Aiming:Toggle({
+local Section_Combat_Aiming_AutoLock = Section_Combat_Aiming:Toggle({
 	Text = "Auto Lock",
 	Tooltip = "Activates 'aim assist' autonomously.",
 	Callback = function(Value)
@@ -1287,7 +1466,7 @@ local Section_Combat_Weapon = Tab_Combat:Section({
 	Side = "Left"
 })
 
-Section_Combat_Weapon:Toggle({
+local Section_Combat_Aiming_AmmoEmptySell = Section_Combat_Weapon:Toggle({
 	Text = "Empty Magazine Sell",
 	Tooltip = "When your weapon runs out of ammo, sell it, then purchase it. (REQUIRES the BARGAINER perk at level 4 for guns other than pistol.)",
 	Callback = function(Value)
@@ -1299,7 +1478,7 @@ Section_Combat_Weapon:Toggle({
 	end
 })
 
-Section_Combat_Weapon:Slider({
+local Section_Combat_Aiming_BulletSpread = Section_Combat_Weapon:Slider({
 	Text = "Bullet Spread",
 	Postfix = "%",
 	Default = 100,
@@ -1327,7 +1506,7 @@ local Section_Combat_Automatic = Tab_Combat:Section({
 	Side = "Left"
 })
 
-Section_Combat_Automatic:Toggle({
+local Section_Combat_Automatic_AutoShoot = Section_Combat_Automatic:Toggle({
 	Text = "Enabled",
 	Tooltip = "Automatically click while you have a gun equipped.",
 	Callback = function(Value)
@@ -1339,7 +1518,7 @@ Section_Combat_Automatic:Toggle({
 	end
 })
 
-Section_Combat_Automatic:Toggle({
+local Section_Combat_Automatic_RestrictAutoLock = Section_Combat_Automatic:Toggle({
 	Text = "Restrict To Locked",
 	Tooltip = "Restrict 'auto-shoot' to when you're locked on to a zombie.",
 	Callback = function(Value)
@@ -1347,21 +1526,29 @@ Section_Combat_Automatic:Toggle({
 	end
 })
 
-local Section_Combat_MeleeKillAura = Tab_Combat:Section({
+Section_Combat_Automatic:Keybind({
+	Text = "Stop",
+	Tooltip = "Stop the automatic shooting.",
+	Default = Enum.KeyCode.X,
+	Callback = function(Value)
+		Section_Combat_Automatic_AutoShoot:Set(false)
+		running_autoShoot = false
+	end
+})
+
+local Section_Combat_KillAura = Tab_Combat:Section({
 	Text = "Killaura",
 	Side = "Right"
 })
 
-Section_Combat_MeleeKillAura:Toggle({
+local Section_Combat_KillAura_Enabled = Section_Combat_KillAura:Toggle({
 	Text = "Enabled",
 	Tooltip = "Automatically attacks zombies within melee distance. (Guns being equipped does not affect this.)",
 	Callback = function(Value)
-		Combat_Killaura = Value
-
 		if Value then
-			RunService:BindToRenderStep("KillAura_Melee", Enum.RenderPriority.Character.Value, Run_KillAura_Melee)
+			RunService:BindToRenderStep("KillAura", Enum.RenderPriority.Character.Value, Run_KillAura)
 		else
-			RunService:UnbindFromRenderStep("KillAura_Melee")
+			RunService:UnbindFromRenderStep("KillAura")
 		end
 	end
 })
@@ -1384,108 +1571,6 @@ Section_Combat_Healing:Toggle({
 		end
 	end
 })
-
---- [[[]]] ---
-
-local Section_ESP_Zombie = Tab_ESP:Section({
-	Text = "Zombie",
-	Side = "Left"
-})
-
-Section_ESP_Zombie:Toggle({
-	Text = "Enabled",
-	Tooltip = "Create a highlight around zombies.",
-	Callback = function(Value)
-		ESP_Zombie = Value
-
-		UpdateESPHighlights()
-	end
-})
-
-Section_ESP_Zombie:Toggle({
-	Text = "Ignore Non-Special",
-	Tooltip = "Should only special zombies be highlighted?",
-	Callback = function(Value)
-		ESP_IgnoreNonSpecial = Value
-
-		UpdateESPHighlights()
-	end
-})
-
-local Section_ESP_Player = Tab_ESP:Section({
-	Text = "Player",
-	Side = "Left"
-})
-
-Section_ESP_Player:Toggle({
-	Text = "Enabled",
-	Tooltip = "Create a highlight around players.",
-	Callback = function(Value)
-		ESP_Player = Value
-
-		UpdateESPHighlights()
-	end
-})
-
---- [[[]]] ---
-
-local Section_Farm_Melee = Tab_Farm:Section({
-	Text = "Type A",
-	Side = "Left"
-})
-
-Section_Farm_Melee:Toggle({
-	Text = "Enabled",
-	Tooltip = "Player will walk to shop front door.",
-	Callback = function(Value)
-		if Value then
-			RunService:BindToRenderStep("Farm_Melee", Enum.RenderPriority.Last.Value, Run_Farm_Melee)
-		else
-			RunService:UnbindFromRenderStep("Farm_Melee")
-		end
-	end
-})
-
-Section_Farm_Melee:Toggle({
-	Text = "Purchase Upgrades",
-	Tooltip = "Purchase melee upgrades when possible. (Will attempt to max.)",
-	Callback = function(Value)
-		Farm_MeleeUpgrades = Value
-	end
-})
-
-local Section_Game_Status = Tab_Farm:Section({
-	Text = "Status",
-	Side = "Right"
-})
-
-Section_Game_Status:Toggle({
-	Text = "Anti-AFK",
-	Tooltip = "Prevents you from being kicked for idle-status. (Window can be minimized)",
-	Callback = function(Value)
-		if Value then
-			connection_AntiAFK = Players.LocalPlayer.Idled:Connect(function()
-				VirtualUser:ClickButton2(Vector2.new(0, 0))
-			end)
-		else
-			connection_AntiAFK:Disconnect()
-			connection_AntiAFK = nil
-		end
-	end
-})
-
-Section_Game_Status:Toggle({
-	Text = "Auto Ready-Up",
-	Tooltip = "Automatically ready-up when possible.",
-	Callback = function(Value)
-		if Value then
-			RunService:BindToRenderStep("Game_AutoReady", Enum.RenderPriority.Last.Value, AttemptVoteSkip)
-		else
-			RunService:UnbindFromRenderStep("Game_AutoReady")
-		end
-	end
-})
-
 
 --- [[[]]] ---
 
@@ -1551,7 +1636,7 @@ Section_Shop_AutoRefill:Toggle({
 	end
 })
 
-Section_Shop_AutoRefill:Toggle({
+local Section_Shop_AutoRefill_Shop = Section_Shop_AutoRefill:Toggle({
 	Text = "Shop",
 	Tooltip = "Automatically Refill shop health. (Cannot be used outside during an active wave.)",
 	Callback = function(Value)
@@ -1686,6 +1771,198 @@ Section_Shop_Sell:Button({
 		end
 	end
 })
+
+--- [[[]]] ---
+
+local Section_ESP_Zombie = Tab_ESP:Section({
+	Text = "Zombie",
+	Side = "Left"
+})
+
+Section_ESP_Zombie:Toggle({
+	Text = "Enabled",
+	Tooltip = "Create a highlight around zombies.",
+	Callback = function(Value)
+		ESP_Zombie = Value
+
+		UpdateESPHighlights()
+	end
+})
+
+Section_ESP_Zombie:Toggle({
+	Text = "Ignore Non-Special",
+	Tooltip = "Should only special zombies be highlighted?",
+	Callback = function(Value)
+		ESP_IgnoreNonSpecial = Value
+
+		UpdateESPHighlights()
+	end
+})
+
+local Section_ESP_Player = Tab_ESP:Section({
+	Text = "Player",
+	Side = "Left"
+})
+
+Section_ESP_Player:Toggle({
+	Text = "Enabled",
+	Tooltip = "Create a highlight around players.",
+	Callback = function(Value)
+		ESP_Player = Value
+
+		UpdateESPHighlights()
+	end
+})
+
+--- [[[]]] ---
+
+local Section_Farm_Status = Tab_Farm:Section({
+	Text = "Status",
+	Side = "Right"
+})
+
+local Section_Farm_Status_AntiAFK = Section_Farm_Status:Toggle({
+	Text = "Anti-AFK",
+	Tooltip = "Prevents you from being kicked for idle-status. (Window can be minimized)",
+	Callback = function(Value)
+		if Value then
+			connection_AntiAFK = Players.LocalPlayer.Idled:Connect(function()
+				VirtualUser:ClickButton2(Vector2.new(0, 0))
+			end)
+		else
+			connection_AntiAFK:Disconnect()
+			connection_AntiAFK = nil
+		end
+	end
+})
+
+local Section_Farm_Status_AutoReady = Section_Farm_Status:Toggle({
+	Text = "Auto Ready-Up",
+	Tooltip = "Automatically ready-up when possible.",
+	Callback = function(Value)
+		if Value then
+			RunService:BindToRenderStep("Game_AutoReady", Enum.RenderPriority.Last.Value, AttemptVoteSkip)
+		else
+			RunService:UnbindFromRenderStep("Game_AutoReady")
+		end
+	end
+})
+
+local Section_Farm_Upgrades = Tab_Farm:Section({
+	Text = "Upgrades",
+	Side = "Right"
+})
+
+Section_Farm_Upgrades:Toggle({
+	Text = "Melee Upgrades",
+	Tooltip = "Purchase melee upgrades when possible. (Will attempt to max.)",
+	Callback = function(Value)
+		if Value then
+			RunService:BindToRenderStep("Upgrade_Melee", Enum.RenderPriority.Last.Value, Run_Upgrade_Melee)
+		else
+			RunService:UnbindFromRenderStep("Upgrade_Melee")
+		end
+	end
+})
+
+local Section_Farm_TypeA = Tab_Farm:Section({
+	Text = "Type A",
+	Side = "Left"
+})
+
+local Toggle_Farm_TypeA = Section_Farm_TypeA:Toggle({
+	Text = "Enabled",
+	Tooltip = "Player will walk to the shop's front door. (Melee)",
+	Callback = function(Value)
+		if Value then
+			RunService:BindToRenderStep("Farm_TypeA", Enum.RenderPriority.Last.Value, Run_Farm_TypeA)
+		else
+			RunService:UnbindFromRenderStep("Farm_TypeA")
+		end
+	end
+})
+
+Section_Farm_TypeA:Button({
+	Text = "Add Dependencies",
+	Tooltip = "Enable the basic dependencies required for auto-farm to work correctly.",
+	Callback = function(Value)
+		Section_Farm_Status_AntiAFK:Set(true)
+		HeartbeatWait()
+
+		Section_Farm_Status_AutoReady:Set(true)
+		HeartbeatWait()
+
+		Section_Combat_KillAura_Enabled:Set(true)
+		HeartbeatWait()
+	end
+})
+
+Section_Farm_TypeA:Keybind({
+	Text = "Stop",
+	Tooltip = "Stop the auto-farm.",
+	Default = Enum.KeyCode.X,
+	Callback = function(Value)
+		Toggle_Farm_TypeA:Set(false)
+	end
+})
+
+-- local Section_Farm_TypeB = Tab_Farm:Section({
+-- 	Text = "Type B",
+-- 	Side = "Left"
+-- })
+
+-- local Toggle_Farm_TypeB = Section_Farm_TypeB:Toggle({
+-- 	Text = "Enabled",
+-- 	Tooltip = "Player will walk outside the shop's front door. (Shooting)",
+-- 	Callback = function(Value)
+-- 		if Value then
+-- 			RunService:BindToRenderStep("Farm_TypeB", Enum.RenderPriority.Last.Value, Run_Farm_TypeB)
+-- 		else
+-- 			RunService:UnbindFromRenderStep("Farm_TypeB")
+-- 		end
+-- 	end
+-- })
+
+-- Section_Farm_TypeB:Button({
+-- 	Text = "Add Dependencies",
+-- 	Tooltip = "Enable the basic dependencies required for auto-farm to work correctly.",
+-- 	Callback = function(Value)
+-- 		task.spawn(function()
+-- 			Section_Farm_Status_AntiAFK:Set(true)
+-- 			HeartbeatWait()
+		
+-- 			Section_Farm_Status_AutoReady:Set(true)
+-- 			HeartbeatWait()
+		
+-- 			Toggle_AimAssistEnabled:Set(true)
+-- 			HeartbeatWait()
+		
+-- 			Section_Combat_Aiming_PriorityHunter:Set(true)
+-- 			HeartbeatWait()
+		
+-- 			Section_Combat_Aiming_PriorityBoss:Set(true)
+-- 			HeartbeatWait()
+		
+-- 			Section_Combat_Aiming_AutoLock:Set(true)
+-- 			HeartbeatWait()
+		
+-- 			Section_Combat_Aiming_AmmoEmptySell:Set(true)
+-- 			HeartbeatWait()
+		
+-- 			Section_Combat_Automatic_AutoShoot:Set(true)
+-- 			HeartbeatWait()
+-- 		end)
+-- 	end
+-- })
+
+-- Section_Farm_TypeB:Keybind({
+-- 	Text = "Stop",
+-- 	Tooltip = "Stop the auto-farm.",
+-- 	Default = Enum.KeyCode.X,
+-- 	Callback = function(Value)
+-- 		Toggle_Farm_TypeB:Set(false)
+-- 	end
+-- })
 
 --- [[[]]] ---
 
