@@ -43,6 +43,7 @@ local Map = workspace:FindFirstChild("Map")
 
 local ToolStorage = ReplicatedStorage:FindFirstChild("Tools")
 local ZombiesFolder = workspace:FindFirstChild("Zombies")
+local DeployablesFolder = workspace:FindFirstChild("Deployables")
 
 local ShopRegions = ReplicatedStorage:FindFirstChild("ShopRegions") or workspace
 local SpawnExit = ShopRegions:FindFirstChild("SpawnExit")
@@ -79,6 +80,7 @@ local lastAutoEquip = 0
 local isRightClickHeld = false
 
 local weaponList = {}
+local globalTransparentParts = nil
 
 local connection_AntiAFK = nil
 
@@ -248,16 +250,88 @@ local function GetCurrentGun()
 	return tool, currentValues
 end
 
-local function GetClosestZombie(usePriority)
-	if not ZombiesFolder then
-		return
+local function GetPlayerCharacters()
+	local characterList = {}
+
+	for _, player in Players:GetPlayers() do
+		local character = player.Character
+		if not character then
+			continue
+		end
+
+		table.insert(characterList, character)
 	end
 
+	return characterList
+end
+
+function GetTransparentParts()
+	local parts = {}
+
+	for _, part in workspace:GetDescendants() do
+		if not part:IsA("BasePart") then
+			continue
+		end
+
+		if part.Transparency == 1 then
+			table.insert(parts, part)
+		end
+	end
+
+	return parts
+end
+
+local function IsLookingAtZombie(model)
 	local localCharacter, localRoot = GetLocalCharacter()
 	if not localCharacter then
 		return
 	end
+	
+	local localHead = localCharacter:FindFirstChild("Head")
+	if not localHead then
+		return
+	end
+	
+	local zombieHead = model:FindFirstChild("Head")
+	if not zombieHead then
+		return
+	end
+	
+	local raycastParams = RaycastParams.new()
+	raycastParams.FilterType = Enum.RaycastFilterType.Exclude
+	raycastParams.FilterDescendantsInstances = {
+		localCharacter,
+		model,
+		globalTransparentParts,
+		ZombiesFolder,
+		DeployablesFolder,
+		GetPlayerCharacters(),
+	}
 
+	local origin = localHead.Position
+	local direction = zombieHead.Position - origin
+	local raycastResult = workspace:Raycast(origin, direction, raycastParams)
+
+	if raycastResult then
+		local hitInstance = raycastResult.Instance
+		if hitInstance then
+			if hitInstance:IsDescendantOf(ZombiesFolder) then
+				return true
+			end
+		end
+	end
+end
+
+local function GetClosestZombie(usePriority)
+	if not ZombiesFolder then
+		return
+	end
+	
+	local localCharacter, localRoot = GetLocalCharacter()
+	if not localCharacter then
+		return
+	end
+	
 	local bestModel = nil
 	local bestHead = nil
 	local bestPriority = nil
@@ -294,8 +368,8 @@ local function GetClosestZombie(usePriority)
 			return
 		end
 
-		local head = model:FindFirstChild("Head")
-		if not head then
+		local zombieHead = model:FindFirstChild("Head")
+		if not zombieHead then
 			return
 		end
 
@@ -307,8 +381,12 @@ local function GetClosestZombie(usePriority)
 		else
 			return false
 		end
-
-		return true, rootPart, head
+		
+		if not IsLookingAtZombie(model) then
+			return false	
+		end
+		
+		return true, rootPart, zombieHead
 	end
 
 	local function GetZombiePriority(model)
@@ -322,7 +400,7 @@ local function GetClosestZombie(usePriority)
 	end
 
 	for _, model in ZombiesFolder:GetChildren() do
-		local valid, rootPart, head = ValidateZombie(model)
+		local valid, rootPart, zombieHead = ValidateZombie(model)
 		if not valid then
 			continue
 		end
@@ -339,7 +417,7 @@ local function GetClosestZombie(usePriority)
 			or (priority == bestPriority and magnitude < bestDistance)
 		then
 			bestModel = model
-			bestHead = head
+			bestHead = zombieHead
 			bestPriority = priority
 			bestDistance = magnitude
 		end
@@ -457,42 +535,42 @@ local function ShortClick1()
 end
 
 function SetRightClickDown(toggle)
-    if toggle and not isRightClickHeld then
-        mouse2press()
-        isRightClickHeld = true
-    elseif not toggle and isRightClickHeld then
-        mouse2release()
-        isRightClickHeld = false
-    end
+	if toggle and not isRightClickHeld then
+		mouse2press()
+		isRightClickHeld = true
+	elseif not toggle and isRightClickHeld then
+		mouse2release()
+		isRightClickHeld = false
+	end
 end
 
 local function SetCameraToFirstPerson()
 	local preZoomLevel = LocalPlayer.CameraMaxZoomDistance
-		
+
 	LocalPlayer.CameraMaxZoomDistance = 0.5
 	LocalPlayer.CameraMaxZoomDistance = preZoomLevel
 end
 
 local function GetDefaultFOV()
-    local current = PlayerGui
-    local path = {
-        "MenuGui",
-        "SettingsFrame",
-        "Settings",
-        "OptionsFrame",
-        "FieldOfView",
-        "Margins",
-        "Amount"
-    }
+	local current = PlayerGui
+	local path = {
+		"MenuGui",
+		"SettingsFrame",
+		"Settings",
+		"OptionsFrame",
+		"FieldOfView",
+		"Margins",
+		"Amount"
+	}
 
-    for _, name in ipairs(path) do
-        current = current:FindFirstChild(name)
-        if not current then
-            return
-        end
-    end
+	for _, name in ipairs(path) do
+		current = current:FindFirstChild(name)
+		if not current then
+			return
+		end
+	end
 
-    return tonumber(current.Text)
+	return tonumber(current.Text)
 end
 
 local function IsPlayerAiming()
@@ -539,12 +617,12 @@ local function PlayerIsFirstPerson()
 		return
 	end
 
-	local head = localCharacter:FindFirstChild("Head")
-	if not head then
+	local localHead = localCharacter:FindFirstChild("Head")
+	if not localHead then
 		return
 	end
 
-	local distanceToHead = (CurrentCamera.CFrame.Position - head.Position).Magnitude
+	local distanceToHead = (CurrentCamera.CFrame.Position - localHead.Position).Magnitude
 	if distanceToHead > 1 then
 		return
 	end
@@ -553,7 +631,7 @@ local function PlayerIsFirstPerson()
 end
 
 local function HeartbeatWait()
-    RunService.Heartbeat:Wait()
+	RunService.Heartbeat:Wait()
 end
 
 local function SufficientBargainerPerk()
@@ -731,6 +809,11 @@ local function Run_Aimbot_AimAssist()
 		return
 	end
 
+	local localCharacter = GetLocalCharacter()
+	if not localCharacter then
+		return
+	end
+
 	local zombieModel, zombieHead = GetClosestZombie(true)
 	if not zombieModel then
 		return
@@ -880,7 +963,7 @@ local function Run_Farm_TypeB()
 	if timeSinceLastEquip < 1 then
 		return
 	end
-	
+
 	lastAutoEquip = os.clock()
 
 	local backpack = GetLocalBackpack()
@@ -1423,7 +1506,7 @@ local function SetupESP()
 			CreateHighlight(child)
 		end
 	end
-	
+
 	if workspace then
 		workspace.ChildAdded:Connect(function(character)
 			local isPlayer = Players:GetPlayerFromCharacter(character)
@@ -2013,25 +2096,25 @@ Section_Farm_TypeA:Keybind({
 -- 		task.spawn(function()
 -- 			Section_Farm_Status_AntiAFK:Set(true)
 -- 			HeartbeatWait()
-		
+
 -- 			Section_Farm_Status_AutoReady:Set(true)
 -- 			HeartbeatWait()
-		
+
 -- 			Toggle_AimAssistEnabled:Set(true)
 -- 			HeartbeatWait()
-		
+
 -- 			Section_Combat_Aiming_PriorityHunter:Set(true)
 -- 			HeartbeatWait()
-		
+
 -- 			Section_Combat_Aiming_PriorityBoss:Set(true)
 -- 			HeartbeatWait()
-		
+
 -- 			Section_Combat_Aiming_AutoLock:Set(true)
 -- 			HeartbeatWait()
-		
+
 -- 			Toggle_AmmoEmptySell:Set(true)
 -- 			HeartbeatWait()
-		
+
 -- 			Section_Combat_Automatic_AutoShoot:Set(true)
 -- 			HeartbeatWait()
 -- 		end)
@@ -2094,3 +2177,5 @@ RunService:UnbindFromRenderStep("Combat_BulletSpread")
 RunService:BindToRenderStep("Combat_BulletSpread", Enum.RenderPriority.Last.Value, function()
 	Run_Combat_BulletSpread()
 end)
+
+globalTransparentParts = GetTransparentParts()
