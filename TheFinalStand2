@@ -25,6 +25,7 @@ local SellRepairEvent = RemoteEvents:FindFirstChild("SellRepair")
 local BuyWeaponEvent = RemoteEvents:FindFirstChild("BuyWeapon")
 local SellWeaponEvent = RemoteEvents:FindFirstChild("SellWeapon")
 local PlayerTeleportEvent = RemoteEvents:FindFirstChild("PlayerTeleport")
+local UpgradeWeaponEvent = RemoteEvents:FindFirstChild("UpgradeWeapon")
 
 local RemoteFunctions = ReplicatedStorage:FindFirstChild("RemoteFunctions")
 local VoteSkipFunction = RemoteFunctions:FindFirstChild("VoteSkip")
@@ -55,6 +56,7 @@ local Combat_ChangeSpread = nil
 local Combat_PriorityBoss = false
 local Combat_PriorityHunter = false
 local Combat_Healing = false
+local Combat_AmmoSellIncludeUpgrades = false
 
 local ESP_Zombie = false
 local ESP_Player = false
@@ -165,6 +167,20 @@ local function GetPlayerUpgrades()
 	end
 
 	return playerUpgrades
+end
+
+local function GetWeaponUpgrades()
+	local upgrades = LocalPlayer:FindFirstChild("Upgrades")
+	if not upgrades then
+		return
+	end
+
+	local gunUpgrades = upgrades:FindFirstChild("GunUpgrades")
+	if not gunUpgrades then
+		return
+	end
+
+	return gunUpgrades
 end
 
 local function GetCurrentTools(excludeEmptyCharge)
@@ -538,6 +554,19 @@ end
 
 local function HeartbeatWait()
     RunService.Heartbeat:Wait()
+end
+
+local function SufficientBargainerPerk()
+	local bargainerPerk = PlayerPerks:FindFirstChild("SellValue")
+	if not bargainerPerk then
+		return false
+	end
+
+	if bargainerPerk.PerkLevel.Value < 4 then
+		return false
+	end
+
+	return true
 end
 
 -- [Functional] --
@@ -918,13 +947,10 @@ local function Run_Combat_InfiniteAmmoResell()
 		return
 	end
 
-	if foundTool.Name ~= "Pistol" then -- Prevent sell of guns other than pistol (If bargainer perk is not level 4)
-		local bargainerPerk = PlayerPerks:FindFirstChild("SellValue")
-		if not bargainerPerk then
-			return
-		end
+	local bargainerPerk = SufficientBargainerPerk()
 
-		if bargainerPerk.PerkLevel.Value < 4 then
+	if foundTool.Name ~= "Pistol" then -- Prevent sell of guns other than pistol (If bargainer perk is not level 4)
+		if not bargainerPerk then
 			return
 		end
 	end
@@ -947,6 +973,8 @@ local function Run_Combat_InfiniteAmmoResell()
 		return
 	end
 	isReselling = true
+
+	local previousUpgrades = {}
 
 	local toolName = foundTool.Name
 
@@ -975,6 +1003,10 @@ local function Run_Combat_InfiniteAmmoResell()
 
 			task.wait()
 
+			if #previousUpgrades > 0 then
+				task.wait(0.1)
+			end
+
 			humanoid:EquipTool(foundTool)
 		end)
 
@@ -982,11 +1014,48 @@ local function Run_Combat_InfiniteAmmoResell()
 		connection = nil
 	end)
 
+	local function AddPreviousUpgrades()
+		local weaponUpgrades = GetWeaponUpgrades()
+		if not weaponUpgrades then
+			return
+		end
+
+		local foundUpgrades = weaponUpgrades:FindFirstChild(toolName)
+		if not foundUpgrades then
+			return
+		end
+
+		for _, intValue in foundUpgrades:GetChildren() do
+			if intValue.Value == 0 then
+				continue
+			end
+
+			local upgradeIndex = {
+				Upgrade = intValue.Name,
+				Value = intValue.Value,
+			}
+
+			table.insert(previousUpgrades, upgradeIndex)
+		end
+	end
+
+	if Combat_AmmoSellIncludeUpgrades then
+		if bargainerPerk then
+			AddPreviousUpgrades()
+		end
+	end
+
 	SellWeaponEvent:FireServer(toolName)
 	task.wait(0.2)
 
 	BuyWeaponEvent:FireServer(toolName)
 	task.wait(0.2)
+
+	for _, upgradeInfo in ipairs(previousUpgrades) do
+		for i = 1, upgradeInfo.Value do
+			UpgradeWeaponEvent:FireServer(toolName, upgradeInfo.Upgrade)
+		end
+	end
 
 	isReselling = false
 end
@@ -1467,18 +1536,6 @@ local Section_Combat_Weapon = Tab_Combat:Section({
 	Side = "Left"
 })
 
-local Section_Combat_Aiming_AmmoEmptySell = Section_Combat_Weapon:Toggle({
-	Text = "Empty Magazine Sell",
-	Tooltip = "When your weapon runs out of ammo, sell it, then purchase it. (REQUIRES the BARGAINER perk at level 4 for guns other than pistol.)",
-	Callback = function(Value)
-		if Value then
-			RunService:BindToRenderStep("Combat_InfiniteAmmoResell", Enum.RenderPriority.Last.Value, Run_Combat_InfiniteAmmoResell)
-		else
-			RunService:UnbindFromRenderStep("Combat_InfiniteAmmoResell")
-		end
-	end
-})
-
 local Section_Combat_Aiming_BulletSpread = Section_Combat_Weapon:Slider({
 	Text = "Bullet Spread",
 	Postfix = "%",
@@ -1527,6 +1584,31 @@ local Section_Combat_Automatic_RestrictAutoLock = Section_Combat_Automatic:Toggl
 	end
 })
 
+local Section_Combat_EmptySell = Tab_Combat:Section({
+	Text = "Empty Magazine Sell",
+	Side = "Left"
+})
+
+local Toggle_AmmoEmptySell = Section_Combat_EmptySell:Toggle({
+	Text = "Enabled",
+	Tooltip = "When your weapon runs out of ammo, sell it, then purchase it. (REQUIRES the BARGAINER perk at level 4 for guns other than pistol)",
+	Callback = function(Value)
+		if Value then
+			RunService:BindToRenderStep("Combat_InfiniteAmmoResell", Enum.RenderPriority.Last.Value, Run_Combat_InfiniteAmmoResell)
+		else
+			RunService:UnbindFromRenderStep("Combat_InfiniteAmmoResell")
+		end
+	end
+})
+
+local Toggle_AmmoEmptyUpgrades = Section_Combat_EmptySell:Toggle({
+	Text = "Include Upgrades",
+	Tooltip = "Include the previous upgrades of the weapon. (REQUIRES the BARGAINER perk at level 4)",
+	Callback = function(Value)
+		Combat_AmmoSellIncludeUpgrades = Value
+	end
+})
+
 Section_Combat_Automatic:Keybind({
 	Text = "Stop",
 	Tooltip = "Stop the automatic shooting.",
@@ -1561,7 +1643,7 @@ local Section_Combat_Healing = Tab_Combat:Section({
 
 Section_Combat_Healing:Toggle({
 	Text = "Enabled",
-	Tooltip = "Automatically attempt to heal at low health. (Dynamically chooses best item)",
+	Tooltip = "Automatically attempt to heal at low health. (Dynamically chooses best item, Bypasses Use-Time)",
 	Callback = function(Value)
 		Combat_Healing = Value
 
@@ -1947,7 +2029,7 @@ Section_Farm_TypeA:Keybind({
 -- 			Section_Combat_Aiming_AutoLock:Set(true)
 -- 			HeartbeatWait()
 		
--- 			Section_Combat_Aiming_AmmoEmptySell:Set(true)
+-- 			Toggle_AmmoEmptySell:Set(true)
 -- 			HeartbeatWait()
 		
 -- 			Section_Combat_Automatic_AutoShoot:Set(true)
