@@ -712,6 +712,22 @@ local function SufficientBargainerPerk()
 	return true
 end
 
+local function SomebodyHasMutualFundPerk()
+	for _, player in Players:GetPlayers() do
+		local playerPerks = player:FindFirstChild("PlayerPerks")
+		if not playerPerks then
+			continue
+		end
+
+		local mutualFundPerk = PlayerPerks:FindFirstChild("TeamInvestor")
+		if mutualFundPerk then
+			return true
+		end
+	end
+
+	return false
+end
+
 -- [Functional] --
 
 local function Run_KillAura()
@@ -1540,6 +1556,11 @@ local function Run_UpdateShopDoorCollision(toggle)
 end
 
 local function Run_AutoSell()
+	local mutualFundPerk = SomebodyHasMutualFundPerk()
+	if not mutualFundPerk then
+		return
+	end
+
 	local localCharacter = GetLocalCharacter()
 	if not localCharacter then
 		return
@@ -1547,11 +1568,6 @@ local function Run_AutoSell()
 
 	local backpack = GetLocalBackpack()
 	if not backpack then
-		return
-	end
-
-	local bargainerPerk = true -- SufficientBargainerPerk()
-	if not bargainerPerk then
 		return
 	end
 
@@ -1608,6 +1624,11 @@ local function Run_AutoSell()
 			task.wait(15)
 
 			if Shop_AutoSell and Shop_AutoSellRePurchase then
+				local bargainerPerk = SufficientBargainerPerk()
+				if not bargainerPerk then
+					return
+				end
+
 				BuyWeaponEvent:FireServer(toolName)
 				task.wait(0.2)
 
