@@ -87,7 +87,7 @@ local lastAutoReady = 0
 local isRightClickHeld = false
 
 local weaponList = {}
-local globalTransparentParts = nil
+local globalTransparentParts = {}
 
 local connection_AntiAFK = nil
 local connection_autoSell = nil
@@ -276,14 +276,23 @@ end
 
 function GetTransparentParts()
 	local parts = {}
+	local check = 0
 
 	for _, part in workspace:GetDescendants() do
+		check += 1
+
+		if check > 15 then
+			check = 0
+			RunService.Heartbeat:Wait()
+		end
+
 		if not part:IsA("BasePart") then
 			continue
 		end
 
 		if part.Transparency == 1 then
 			table.insert(parts, part)
+			check += 3
 		end
 	end
 
@@ -1211,6 +1220,8 @@ local function Run_Combat_InfiniteAmmoResell()
 		end
 	end
 
+	task.wait(Combat_AmmoSellWaitTime or 0)
+
 	SellWeaponEvent:FireServer(toolName)
 	task.wait(0.2)
 
@@ -1929,6 +1940,17 @@ local Toggle_AmmoEmptySell = Section_Combat_EmptySell:Toggle({
 	end
 })
 
+local Section_Combat_Aiming_BulletSpread = Section_Combat_EmptySell:Slider({
+	Text = "Sell Delay",
+	Postfix = "ms",
+	Default = 0,
+	Minimum = 0,
+	Maximum = 1000,
+	Callback = function(Value)
+		Combat_AmmoSellWaitTime = Value / 1000
+	end
+})
+
 local Toggle_AmmoEmptyUpgrades = Section_Combat_EmptySell:Toggle({
 	Text = "Include Upgrades",
 	Tooltip = "Include the previous upgrades of the weapon. (REQUIRES the BARGAINER perk at level 4)",
@@ -2495,4 +2517,6 @@ RunService:BindToRenderStep("Combat_BulletSpread", Enum.RenderPriority.Last.Valu
 	Run_Combat_BulletSpread()
 end)
 
-globalTransparentParts = GetTransparentParts()
+task.spawn(function()
+	globalTransparentParts = GetTransparentParts()
+end)
