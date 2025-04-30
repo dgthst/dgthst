@@ -15,6 +15,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
 local CoreGui = game:WaitForChild("CoreGui")
 local VirtualUser = game:GetService("VirtualUser")
+local Lighting = game:GetService("Lighting")
 
 -- Remotes
 
@@ -90,6 +91,7 @@ local globalTransparentParts = nil
 
 local connection_AntiAFK = nil
 local connection_autoSell = nil
+local connection_removeFog = nil
 
 local running_autoShoot = false
 
@@ -1644,6 +1646,23 @@ local function Run_AutoSell()
 	end
 end
 
+local function Run_RemoveEncroachingFog()
+	Lighting.FogStart = 10000000
+	Lighting.FogEnd = 10000000
+
+	local safeIgnoreList = workspace:FindFirstChild("SafeIgnoreList")
+	if not safeIgnoreList then
+		return
+	end
+
+	local fogDome = safeIgnoreList:FindFirstChild("FogDome")
+	if not fogDome then
+		return
+	end
+
+	fogDome.Transparency = 1
+end
+
 -- [[Default]] --
 
 local function OnInputBegan(input, processed)
@@ -2441,6 +2460,26 @@ Section_Extra_Upgrades:Button({
 	Tooltip = "Unlock visual upgrades for free. (Client-Sided, Does not count toward 'Overkill' challenge)",
 	Callback = function(Value)
 		UnlockNightVisionVisuals()
+	end
+})
+
+local Section_Extra_Visual = Tab_Extra:Section({
+	Text = "Visual",
+	Side = "Right"
+})
+
+Section_Extra_Visual:Toggle({
+	Text = "Remove Fog",
+	Tooltip = "Remove the fog from the 'Encroaching Fog' mutation mode.",
+	Callback = function(Value)
+		if Value then
+			connection_removeFog = RunService.PreRender:Connect(Run_RemoveEncroachingFog)
+		else
+			if connection_removeFog then
+				connection_removeFog:Disconnect()
+				connection_removeFog = nil
+			end
+		end
 	end
 })
 
