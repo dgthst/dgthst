@@ -26,10 +26,11 @@ local BuyWeaponEvent = RemoteEvents:FindFirstChild("BuyWeapon")
 local SellWeaponEvent = RemoteEvents:FindFirstChild("SellWeapon")
 local PlayerTeleportEvent = RemoteEvents:FindFirstChild("PlayerTeleport")
 local UpgradeWeaponEvent = RemoteEvents:FindFirstChild("UpgradeWeapon")
+local ClientWaveSurviveEvent = RemoteEvents:FindFirstChild("ClientWaveSurvive")
 
 local RemoteFunctions = ReplicatedStorage:FindFirstChild("RemoteFunctions")
 local VoteSkipFunction = RemoteFunctions:FindFirstChild("VoteSkip")
-local UseConsumableFunction =  RemoteFunctions:FindFirstChild("UseConsumable")
+local UseConsumableFunction = RemoteFunctions:FindFirstChild("UseConsumable")
 
 -- Variables
 
@@ -57,6 +58,7 @@ local Combat_ChangeSpread = nil
 local Combat_PriorityBoss = false
 local Combat_PriorityHunter = false
 local Combat_Healing = false
+local Combat_EquipPreviousItem = false
 local Combat_AmmoSellIncludeUpgrades = false
 
 local ESP_Zombie = false
@@ -68,6 +70,9 @@ local Shop_Sell = nil
 local Shop_OverridePurchase = nil
 local Shop_OverrideSell = nil
 
+local Shop_AutoSell = false
+local Shop_AutoSellRePurchase = false
+
 local isAiming = false
 local isReselling = false
 local isConsuming = false
@@ -76,6 +81,7 @@ local lockedOnZombie = false
 
 local lastUpgradedMelee = 0
 local lastAutoEquip = 0
+local lastAutoReady = 0
 
 local isRightClickHeld = false
 
@@ -83,6 +89,7 @@ local weaponList = {}
 local globalTransparentParts = nil
 
 local connection_AntiAFK = nil
+local connection_autoSell = nil
 
 local running_autoShoot = false
 
@@ -282,122 +289,80 @@ function GetTransparentParts()
 end
 
 local function IsLookingAtZombie(model)
-	local localCharacter, localRoot = GetLocalCharacter()
-	if not localCharacter then
+	local character = GetLocalCharacter()
+	if not character then return end
+
+	local localHead = character:FindFirstChild("Head")
+	local zombieHead = model:FindFirstChild("Head")
+	if not (localHead and zombieHead) then
 		return
 	end
-	
-	local localHead = localCharacter:FindFirstChild("Head")
-	if not localHead then
+
+	local ignoreList = {}
+
+	local function add(inst)
+		table.insert(ignoreList, inst)
+	end
+
+	add(character)
+	add(model)
+	add(ZombiesFolder)
+	add(DeployablesFolder)
+
+	for _, part in ipairs(globalTransparentParts) do
+		add(part)
+	end
+
+	for _, charModel in ipairs(GetPlayerCharacters()) do
+		add(charModel)
+	end
+
+	local ray = Ray.new(localHead.Position, zombieHead.Position - localHead.Position)
+	local hitPart, hitPos, hitNormal = workspace:FindPartOnRayWithIgnoreList(ray, ignoreList)
+
+	if hitPart then
+		if hitPart:IsDescendantOf(ZombiesFolder) then
+			return true
+		end
+
+		return false
+	end
+
+	return true
+end
+
+local function ValidateZombie(model)
+	local humanoid = model:FindFirstChild("Zombie")
+	if not humanoid or humanoid.Health <= 0 then
 		return
 	end
-	
+
+	local rootPart = model:FindFirstChild("HumanoidRootPart")
+	if not rootPart then
+		return
+	end
+
 	local zombieHead = model:FindFirstChild("Head")
 	if not zombieHead then
 		return
 	end
-	
-	local raycastParams = RaycastParams.new()
-	raycastParams.FilterType = Enum.RaycastFilterType.Exclude
-	raycastParams.FilterDescendantsInstances = {
-		localCharacter,
-		model,
-		globalTransparentParts,
-		ZombiesFolder,
-		DeployablesFolder,
-		GetPlayerCharacters(),
-	}
 
-	local origin = localHead.Position
-	local direction = zombieHead.Position - origin
-	local raycastResult = workspace:Raycast(origin, direction, raycastParams)
-
-	if raycastResult then
-		local hitInstance = raycastResult.Instance
-		if hitInstance then
-			if hitInstance:IsDescendantOf(ZombiesFolder) then
-				return true
-			end
-		end
-	end
+	return true, rootPart, zombieHead
 end
 
-local function GetClosestZombie(usePriority)
+local function GetClosestZombie()
 	if not ZombiesFolder then
 		return
 	end
-	
+
 	local localCharacter, localRoot = GetLocalCharacter()
 	if not localCharacter then
 		return
 	end
-	
+
 	local bestModel = nil
 	local bestHead = nil
-	local bestPriority = nil
 	local bestDistance = nil
-
-	local function IsWithinShootRange(rootPart, currentValues)
-		local rangeValue = currentValues:FindFirstChild("Range")
-		if not rangeValue then
-			return false
-		end
-
-		local magnitude = (rootPart.Position - localRoot.Position).Magnitude
-
-		local forgivenRange = 10
-		if magnitude > rangeValue.Value - forgivenRange then
-			return false
-		end
-
-		return true
-	end
-
-	local function ValidateZombie(model)
-		local humanoid = model:FindFirstChild("Zombie")
-		if not humanoid then
-			return
-		end
-
-		if humanoid.Health <= 0 then
-			return
-		end
-
-		local rootPart = model:FindFirstChild("HumanoidRootPart")
-		if not rootPart then
-			return
-		end
-
-		local zombieHead = model:FindFirstChild("Head")
-		if not zombieHead then
-			return
-		end
-
-		local currentGun, currentValues = GetCurrentGun()
-		if currentGun then
-			if not IsWithinShootRange(rootPart, currentValues) then
-				return false
-			end
-		else
-			return false
-		end
-		
-		if not IsLookingAtZombie(model) then
-			return false	
-		end
-		
-		return true, rootPart, zombieHead
-	end
-
-	local function GetZombiePriority(model)
-		if model.Name == "Hunter" and Combat_PriorityHunter then
-			return 2
-		elseif model.Name == "Boss" and Combat_PriorityBoss then
-			return 1
-		else
-			return 0
-		end
-	end
 
 	for _, model in ZombiesFolder:GetChildren() do
 		local valid, rootPart, zombieHead = ValidateZombie(model)
@@ -410,7 +375,90 @@ local function GetClosestZombie(usePriority)
 		end
 
 		local magnitude = (rootPart.Position - localRoot.Position).Magnitude
-		local priority = usePriority and GetZombiePriority(model) or 0
+
+		if bestModel == nil or magnitude < bestDistance then
+			bestModel = model
+			bestHead = zombieHead
+			bestDistance = magnitude
+		end
+	end
+
+	return bestModel, bestHead
+end
+
+local function GetBestZombieToShoot()
+	if not ZombiesFolder then
+		return
+	end
+
+	local localCharacter, localRoot = GetLocalCharacter()
+	if not localCharacter then
+		return
+	end
+
+	local bestModel = nil
+	local bestHead = nil
+	local bestPriority = nil
+	local bestDistance = nil
+
+	local function IsWithinShootRange(rootPart, currentValues)
+		local rangeValue = currentValues:FindFirstChild("Range")
+		if not rangeValue then
+			return false
+		end
+
+		local magnitude = (rootPart.Position - localRoot.Position).Magnitude
+		local forgivenRange = 10
+		if magnitude > rangeValue.Value - forgivenRange then
+			return false
+		end
+
+		return true
+	end
+
+	local function GetZombiePriority(model)
+		if model.Name == "Hunter" and Combat_PriorityHunter then
+			return 2
+		elseif model.Name == "Boss" and Combat_PriorityBoss then
+			return 1
+		else
+			return 0
+		end
+	end
+
+	local function ValidTarget(model, rootPart)
+		local currentGun, currentValues = GetCurrentGun()
+		if currentGun then
+			if not IsWithinShootRange(rootPart, currentValues) then
+				return false
+			end
+		else
+			return false
+		end
+
+		if not IsLookingAtZombie(model) then
+			return false
+		end
+
+		return true
+	end
+
+	for _, model in ZombiesFolder:GetChildren() do
+		local valid, rootPart, zombieHead = ValidateZombie(model)
+		if not valid then
+			continue
+		end
+
+		if not ValidTarget(model, rootPart) then
+			continue
+		end
+
+		if model:FindFirstChildWhichIsA("ForceField") then
+			continue
+		end
+
+		local magnitude = (rootPart.Position - localRoot.Position).Magnitude
+		local priority = GetZombiePriority(model) or 0
 
 		if bestModel == nil
 			or priority > bestPriority
@@ -439,25 +487,21 @@ local function UpdateESPHighlights()
 
 	for _, categoryFolder in zombieSubFolder:GetChildren() do
 		for _, highlight in categoryFolder:GetChildren() do
-			if highlight:IsA("Highlight") then
-				if ESP_IgnoreNonSpecial then
-					highlight.Enabled = ESP_Zombie and categoryFolder.Name == "Special"
-				else
-					highlight.Enabled = ESP_Zombie
-				end
+			if ESP_IgnoreNonSpecial then
+				highlight.Enabled = ESP_Zombie and categoryFolder.Name == "Special"
+			else
+				highlight.Enabled = ESP_Zombie
 			end
 		end
 	end
 
-	local playerFolder = objectsFolder:FindFirstChild("Player")
-	if not playerFolder then
+	local playerSubFolder = objectsFolder:FindFirstChild("Player")
+	if not playerSubFolder then
 		return
 	end
 
-	for _, highlight in playerFolder:GetChildren() do
-		if highlight:IsA("Highlight") then
-			highlight.Enabled = ESP_Player
-		end
+	for _, highlight in playerSubFolder:GetChildren() do
+		highlight.Enabled = ESP_Player
 	end
 end
 
@@ -573,6 +617,27 @@ local function GetDefaultFOV()
 	return tonumber(current.Text)
 end
 
+local function GetReadyFrameStatus()
+	local current = PlayerGui
+	local path = {
+		"GameFrame",
+		"Core",
+		"WeaponFrame",
+		"VoteSkip",
+	}
+
+	for _, name in ipairs(path) do
+		current = current:FindFirstChild(name)
+		if not current then
+			return
+		end
+	end
+
+	if current.BackgroundColor3 == Color3.fromRGB(0, 162, 255) then
+		return true
+	end
+end
+
 local function IsPlayerAiming()
 	local currentFOV = CurrentCamera.FieldOfView
 	local defaultFOV = GetDefaultFOV()
@@ -655,7 +720,7 @@ local function Run_KillAura()
 		return
 	end
 
-	local zombieModel, zombieHead = GetClosestZombie(false)
+	local zombieModel, zombieHead = GetClosestZombie(false, false)
 	if not zombieModel then
 		return
 	end
@@ -814,7 +879,7 @@ local function Run_Aimbot_AimAssist()
 		return
 	end
 
-	local zombieModel, zombieHead = GetClosestZombie(true)
+	local zombieModel, zombieHead = GetBestZombieToShoot()
 	if not zombieModel then
 		return
 	end
@@ -1263,18 +1328,38 @@ local function UpdateBarricadeSFX(toggle)
 end
 
 local function AttemptVoteSkip()
+	local votedValue = LocalPlayer:FindFirstChild("Voted")
+	if not votedValue then
+		return
+	end
+
+	if votedValue.Value == true then
+		return
+	end
+
+	if GetReadyFrameStatus() == true then
+		return
+	end
+
+	local timeSinceLastReady = (os.clock() - lastAutoReady)
+	if timeSinceLastReady < 0.5 then
+		return
+	end
+	lastAutoReady = os.clock()
+
 	VoteSkipFunction:InvokeServer()
 end
 
 local function Run_Combat_AutoHeal()
 	local localCharacter = GetLocalCharacter()
-	if not localCharacter then
-		return
-	end
+	if not localCharacter then return end
 
 	local localHumanoid = GetLocalHumanoid()
-	if not localHumanoid then
-		return
+	if not localHumanoid then return end
+
+	local previousTool = localCharacter:FindFirstChildWhichIsA("Tool")
+	if previousTool then
+		previousTool = previousTool.Name
 	end
 
 	local function FindItemInTable(searchTable, name)
@@ -1286,48 +1371,37 @@ local function Run_Combat_AutoHeal()
 	end
 
 	local currentTools = GetCurrentTools(true)
-	if not currentTools or #currentTools == 0 then
-		return
-	end
+	if not currentTools or #currentTools == 0 then return end
 
 	local itemChosen = false
 
 	local function EquipItem(item)
-		if itemChosen then
-			return
-		end
+		if itemChosen then return end
 		itemChosen = true
 
-		if item.Parent == localCharacter then
-			return
-		end
+		if item.Parent == localCharacter then return end
 
 		localHumanoid:EquipTool(item)
 	end
 
+	local usedHealing = false
+
 	local function ActivateItem()
-		if isConsuming then
-			return
-		end
+		if isConsuming then return end
 		isConsuming = true
+		usedHealing = true
 
 		task.delay(1, function()
 			isConsuming = false
 		end)
 
 		local foundItem = localCharacter:FindFirstChildWhichIsA("Tool")
-		if not foundItem then
-			return
-		end
+		if not foundItem then return end
 
 		local consumingValue = foundItem:FindFirstChild("Consuming")
-		if not consumingValue then
-			return
-		end
+		if not consumingValue then return end
 
-		if consumingValue.Value == true then
-			return
-		end
+		if consumingValue.Value == true then return end
 
 		UseConsumableFunction:InvokeServer(foundItem, LocalPlayer)
 	end
@@ -1339,35 +1413,44 @@ local function Run_Combat_AutoHeal()
 	}
 
 	local healthPercentage = (localHumanoid.Health / localHumanoid.MaxHealth) * 100
-	if healthPercentage >= 100 then
-		return
-	end
+	if healthPercentage >= 100 then return end
 
 	local item_FirstAidKit = healingItems.FirstAidKit
 	local item_Bandage = healingItems.Bandage
 	local item_BoosterKit = healingItems.BoosterKit
 
-	if healthPercentage < 20 then
-		if item_BoosterKit then
-			EquipItem(item_BoosterKit)
-			task.wait()
-			ActivateItem()
-		end
+	if healthPercentage < 20 and item_BoosterKit then
+		EquipItem(item_BoosterKit)
+		task.wait()
+		ActivateItem()
+	elseif healthPercentage < 40 and item_FirstAidKit then
+		EquipItem(item_FirstAidKit)
+		task.wait()
+		ActivateItem()
+	elseif healthPercentage < 70 and item_Bandage then
+		EquipItem(item_Bandage)
+		task.wait()
+		ActivateItem()
 	end
 
-	if healthPercentage < 40 then
-		if item_FirstAidKit then
-			EquipItem(item_FirstAidKit)
-			task.wait()
-			ActivateItem()
-		end
-	end
+	if Combat_EquipPreviousItem and previousTool then
+		if isConsuming and usedHealing then
+			task.delay(0, function()
+				local backpack = GetLocalBackpack()
+				if not backpack then
+					return
+				end
 
-	if healthPercentage < 70 then
-		if item_Bandage then
-			EquipItem(item_Bandage)
-			task.wait()
-			ActivateItem()
+				local currentTool = localCharacter:FindFirstChildWhichIsA("Tool")
+				if currentTool then
+					currentTool.Parent = backpack
+				end
+
+				local foundTool = backpack:FindFirstChild(previousTool)
+				if foundTool then
+					localHumanoid:EquipTool(foundTool)
+				end
+			end)
 		end
 	end
 end
@@ -1418,6 +1501,128 @@ local function UnlockNightVisionVisuals()
 	upgrades.ViewRange.Value = 1
 end
 
+local function Run_UpdateShopDoorCollision(toggle)
+	local scriptedFolder = Map:FindFirstChild("Scripted")
+	if not scriptedFolder then
+		return
+	end
+
+	local doorsFolder = scriptedFolder:FindFirstChild("Doors")
+	if not doorsFolder then
+		return
+	end
+
+	local frontDoor = doorsFolder:FindFirstChild("FrontDoor")
+	if not frontDoor then
+		return
+	end
+
+	local clipPart = frontDoor:FindFirstChild("FrontClipping")
+	if not clipPart then
+		return
+	end
+
+	for _, part in frontDoor:GetDescendants() do
+		if not part:IsA("BasePart") then
+			continue
+		end
+
+		if part == clipPart then
+			continue
+		end
+
+		part.CanCollide = if toggle then true else false
+	end
+
+	if not toggle then
+		clipPart.CanCollide = false
+	end
+end
+
+local function Run_AutoSell()
+	local localCharacter = GetLocalCharacter()
+	if not localCharacter then
+		return
+	end
+
+	local backpack = GetLocalBackpack()
+	if not backpack then
+		return
+	end
+
+	local bargainerPerk = true -- SufficientBargainerPerk()
+	if not bargainerPerk then
+		return
+	end
+
+	local function AddPreviousUpgrades(toolName)
+		local previousUpgrades = {}
+		local weaponUpgrades = GetWeaponUpgrades()
+		if not weaponUpgrades then
+			return previousUpgrades
+		end
+
+		local foundUpgrades = weaponUpgrades:FindFirstChild(toolName)
+		if not foundUpgrades then
+			return previousUpgrades
+		end
+
+		for _, intValue in foundUpgrades:GetChildren() do
+			if intValue.Value == 0 then
+				continue
+			end
+
+			table.insert(previousUpgrades, {
+				Upgrade = intValue.Name,
+				Value = intValue.Value,
+			})
+		end
+
+		return previousUpgrades
+	end
+
+	local toolsToProcess = {}
+
+	for _, tool in backpack:GetChildren() do
+		if not tool:IsA("Tool") then
+			continue
+		end
+
+		table.insert(toolsToProcess, tool)
+	end
+
+	for _, tool in localCharacter:GetChildren() do
+		if not tool:IsA("Tool") then
+			continue
+		end
+
+		table.insert(toolsToProcess, tool)
+	end
+
+	for _, tool in ipairs(toolsToProcess) do
+		task.spawn(function()
+			local toolName = tool.Name
+			local previousUpgrades = AddPreviousUpgrades(toolName)
+
+			SellWeaponEvent:FireServer(toolName)
+			task.wait(15)
+
+			if Shop_AutoSell and Shop_AutoSellRePurchase then
+				BuyWeaponEvent:FireServer(toolName)
+				task.wait(0.2)
+
+				for _, upgradeInfo in ipairs(previousUpgrades) do
+					for i = 1, upgradeInfo.Value do
+						UpgradeWeaponEvent:FireServer(toolName, upgradeInfo.Upgrade)
+					end
+				end
+			end
+		end)
+
+		task.wait(0.1)
+	end
+end
+
 -- [[Default]] --
 
 local function OnInputBegan(input, processed)
@@ -1462,29 +1667,30 @@ local function SetupESP()
 	folder_player.Name = "Player"
 	folder_player.Parent = folder_main
 
-	local function CreateHighlight(model, isPlayer)
+	local function CreateHighlight(model, player)
 		if not folder_main then
 			return
 		end
 
-		if LocalPlayer == isPlayer then
+		if player and LocalPlayer == player then
 			return
 		end
 
 		local highlight = Instance.new("Highlight")
 		highlight.FillTransparency = 1
 
-		if isPlayer then
+		if player then
 			highlight.OutlineColor = highlightColors.Player
 			highlight.Enabled = ESP_Player
 			highlight.Parent = folder_player
 		else
 			highlight.OutlineColor = highlightColors[model.Name] or highlightColors.Undefined
-			highlight.Enabled = ESP_Zombie
 			if model.Name == "Zombie" then
 				highlight.Parent = folder_zombie_default
+				highlight.Enabled = ESP_Zombie and not ESP_IgnoreNonSpecial
 			else
 				highlight.Parent = folder_zombie_special
+				highlight.Enabled = ESP_Zombie
 			end
 		end
 
@@ -1507,19 +1713,18 @@ local function SetupESP()
 		end
 	end
 
-	if workspace then
-		workspace.ChildAdded:Connect(function(character)
-			local isPlayer = Players:GetPlayerFromCharacter(character)
-			if isPlayer then
-				CreateHighlight(character, isPlayer)
-			end
-		end)
+	workspace.ChildAdded:Connect(function(character)
+		task.wait(0.5)
+		local player = Players:GetPlayerFromCharacter(character)
+		if player then
+			CreateHighlight(character, player)
+		end
+	end)
 
-		for _, child in workspace:GetChildren() do
-			local isPlayer = Players:GetPlayerFromCharacter(child)
-			if isPlayer then
-				CreateHighlight(child, isPlayer)
-			end
+	for _, child in workspace:GetChildren() do
+		local player = Players:GetPlayerFromCharacter(child)
+		if player then
+			CreateHighlight(child, player)
 		end
 	end
 end
@@ -1692,16 +1897,6 @@ local Toggle_AmmoEmptyUpgrades = Section_Combat_EmptySell:Toggle({
 	end
 })
 
-Section_Combat_Automatic:Keybind({
-	Text = "Stop",
-	Tooltip = "Stop the automatic shooting.",
-	Default = Enum.KeyCode.X,
-	Callback = function(Value)
-		Section_Combat_Automatic_AutoShoot:Set(false)
-		running_autoShoot = false
-	end
-})
-
 local Section_Combat_KillAura = Tab_Combat:Section({
 	Text = "Killaura",
 	Side = "Right"
@@ -1735,6 +1930,14 @@ Section_Combat_Healing:Toggle({
 		else
 			RunService:UnbindFromRenderStep("Combat_AutoHeal")
 		end
+	end
+})
+
+Section_Combat_Healing:Toggle({
+	Text = "Equip Previous Item",
+	Tooltip = "Re-Equip the previously-held item once you heal.",
+	Callback = function(Value)
+		Combat_EquipPreviousItem = Value
 	end
 })
 
@@ -1935,6 +2138,39 @@ Section_Shop_Sell:Button({
 		if finalChoice then
 			SellWeaponEvent:FireServer(finalChoice)
 		end
+	end
+})
+
+local Section_Shop_AutoSell = Tab_Shop:Section({
+	Text = "Auto Sell",
+	Side = "Left"
+})
+
+Section_Shop_AutoSell:Toggle({
+	Text = "Enabled",
+	Tooltip = "Automatically sell all your weapons at the end of a night. (Atleast 1 player must have mutual-fund)",
+	Callback = function(Value)
+		Shop_AutoSell = Value
+
+		if Value then
+			connection_autoSell = ClientWaveSurviveEvent.OnClientEvent:Connect(function()
+				task.wait(3)
+				Run_AutoSell()
+			end)
+		else
+			if connection_autoSell then
+				connection_autoSell:Disconnect()
+				connection_autoSell = nil
+			end
+		end
+	end
+})
+
+Section_Shop_AutoSell:Toggle({
+	Text = "Re-Purchase",
+	Tooltip = "Re-purchase the weapons once mutual-fund activates. (REQUIRES the BARGAINER perk at level 4)",
+	Callback = function(Value)
+		Shop_AutoSellRePurchase = Value
 	end
 })
 
@@ -2149,6 +2385,27 @@ Section_Extra_Audio:Toggle({
 			RunService:UnbindFromRenderStep("Game_RemoveBarricadeBuzz")
 
 			UpdateBarricadeSFX(true)
+		end
+	end
+})
+
+local Section_Extra_Collision = Tab_Extra:Section({
+	Text = "Collision",
+	Side = "Left"
+})
+
+Section_Extra_Collision:Toggle({
+	Text = "Door Collision",
+	Tooltip = "Remove front-door collision, allowing the player to enter the shop at night.",
+	Callback = function(Value)
+		if Value then
+			RunService:BindToRenderStep("Game_UpdateShopDoorCollision", Enum.RenderPriority.Last.Value, function()
+				Run_UpdateShopDoorCollision(false)
+			end)
+		else
+			RunService:UnbindFromRenderStep("Game_UpdateShopDoorCollision")
+
+			Run_UpdateShopDoorCollision(true)
 		end
 	end
 })
