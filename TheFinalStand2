@@ -1747,6 +1747,19 @@ local function SetupESP()
 
 		highlight.Adornee = model
 
+		local humanoid = model:FindFirstChildWhichIsA("Humanoid")
+		if humanoid then
+			humanoid:GetPropertyChangedSignal("Health"):Connect(function()
+				if humanoid.Health > 0 then
+					return
+				end
+
+				if highlight then
+					highlight:Destroy()
+				end
+			end)
+		end
+
 		model.Destroying:Connect(function()
 			if highlight then
 				highlight:Destroy()
