@@ -16,6 +16,7 @@ local UserInputService = game:GetService("UserInputService")
 local CoreGui = game:WaitForChild("CoreGui")
 local VirtualUser = game:GetService("VirtualUser")
 local Lighting = game:GetService("Lighting")
+local HttpService = game:GetService("HttpService")
 
 -- Remotes
 
@@ -39,7 +40,7 @@ local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer.PlayerGui
 local CurrentCamera = workspace.CurrentCamera
 
-local PlayerPerks = LocalPlayer:FindFirstChild("PlayerPerks")
+local LocalPlayerPerks = LocalPlayer:FindFirstChild("PlayerPerks")
 
 local Map = workspace:FindFirstChild("Map")
 
@@ -61,12 +62,15 @@ local Combat_PriorityHunter = false
 local Combat_Healing = false
 local Combat_EquipPreviousItem = false
 local Combat_AmmoSellIncludeUpgrades = false
+local Combat_EquipAutoPurchaseItem = false
 
 local ESP_Zombie = false
 local ESP_Player = false
 
 local Shop_Purchase = nil
 local Shop_Sell = nil
+local Shop_AutoPurchaseItem = nil
+local Shop_AutoPurchaseIncludeUpgrades = false
 
 local Shop_OverridePurchase = nil
 local Shop_OverrideSell = nil
@@ -77,12 +81,14 @@ local Shop_AutoSellRePurchase = false
 local isAiming = false
 local isReselling = false
 local isConsuming = false
-local isEquipping = false
 local lockedOnZombie = false
 
 local lastUpgradedMelee = 0
 local lastAutoEquip = 0
 local lastAutoReady = 0
+local lastAutoPurchase = 0
+
+local ignoreAutoPurchase = {}
 
 local isRightClickHeld = false
 
@@ -100,6 +106,25 @@ local highlightColors = {
 	["Hunter"] = Color3.fromRGB(255, 0, 0),
 	["Undefined"] = Color3.fromRGB(255, 255, 255),
 	["Player"] = Color3.fromRGB(0, 200, 0)
+}
+
+local Wait_Upgrade = 0.2
+
+local definedAutoUpgrades = {
+	["Micro Uzi"] = {
+		[1] = "CriticalChance",
+		[2] = "MaxClip",
+		[3] = "Dual",
+	},
+	["AK-47"] = {
+		[1] = "HeadshotDamage",
+		[2] = "Damage",
+		[3] = "MaxClip",
+	},
+	["Minigun"] = {
+		[1] = "Damage",
+		[2] = "Bullets",
+	},
 }
 
 -- Required Checks
@@ -194,6 +219,20 @@ local function GetWeaponUpgrades()
 	return gunUpgrades
 end
 
+local function AddPurchaseIgnore(name, duration)
+	table.insert(ignoreAutoPurchase, name)
+
+	task.delay(duration, function()
+		for i, v in ipairs(ignoreAutoPurchase) do
+			if v == name then
+				table.remove(ignoreAutoPurchase, i)
+				break
+			end
+		end
+	end)
+end
+
+
 local function GetCurrentTools(excludeEmptyCharge)
 	local localCharacter = GetLocalCharacter()
 	if not localCharacter then
@@ -201,6 +240,9 @@ local function GetCurrentTools(excludeEmptyCharge)
 	end
 
 	local backpack = GetLocalBackpack()
+	if not backpack then
+		return
+	end
 
 	local function GetToolChildren(...)
 		local objects = {...}
@@ -606,31 +648,10 @@ local function SetCameraToFirstPerson()
 	LocalPlayer.CameraMaxZoomDistance = preZoomLevel
 end
 
-local function GetDefaultFOV()
-	local current = PlayerGui
-	local path = {
-		"MenuGui",
-		"SettingsFrame",
-		"Settings",
-		"OptionsFrame",
-		"FieldOfView",
-		"Margins",
-		"Amount"
-	}
-
-	for _, name in ipairs(path) do
-		current = current:FindFirstChild(name)
-		if not current then
-			return
-		end
-	end
-
-	return tonumber(current.Text)
-end
-
 local function GetReadyFrameStatus()
 	local current = PlayerGui
 	local path = {
+		"ScreenGui",
 		"GameFrame",
 		"Core",
 		"WeaponFrame",
@@ -647,21 +668,6 @@ local function GetReadyFrameStatus()
 	if current.BackgroundColor3 == Color3.fromRGB(0, 162, 255) then
 		return true
 	end
-end
-
-local function IsPlayerAiming()
-	local currentFOV = CurrentCamera.FieldOfView
-	local defaultFOV = GetDefaultFOV()
-
-	if not defaultFOV then
-		return
-	end
-
-	if currentFOV < defaultFOV then
-		return true
-	end
-
-	return false
 end
 
 local function PlayerIsAlive()
@@ -711,7 +717,7 @@ local function HeartbeatWait()
 end
 
 local function SufficientBargainerPerk()
-	local bargainerPerk = PlayerPerks:FindFirstChild("SellValue")
+	local bargainerPerk = LocalPlayerPerks:FindFirstChild("SellValue")
 	if not bargainerPerk then
 		return false
 	end
@@ -730,13 +736,58 @@ local function SomebodyHasMutualFundPerk()
 			continue
 		end
 
-		local mutualFundPerk = PlayerPerks:FindFirstChild("TeamInvestor")
+		local mutualFundPerk = playerPerks:FindFirstChild("TeamInvestor")
 		if mutualFundPerk then
 			return true
 		end
 	end
 
 	return false
+end
+
+local function GetClockString()
+	local current = PlayerGui
+	local path = {
+		"ScreenGui",
+		"GameFrame",
+		"Core",
+		"PlayerFrame",
+		"Time"
+	}
+
+	for _, name in ipairs(path) do
+		current = current:FindFirstChild(name)
+		if not current then
+			return
+		end
+	end
+
+	return tonumber(current.Text)
+end
+
+local function ClockToTime(clock)
+	local minutes, seconds = string.match(clock, "^(%d+):(%d+)$")
+	minutes = tonumber(minutes)
+	seconds = tonumber(seconds)
+
+	if minutes == nil or seconds == nil then
+		error("Invalid time format. Expected 'MM:SS'")
+	end
+
+	local totalSeconds = minutes * 60 + seconds
+	return totalSeconds
+end
+
+local function GetCurrentMoney()
+	return LocalPlayer.ReplicatedMoney.Value
+end
+
+local function FindItemInTable(searchTable, name)
+	for _, item in searchTable do
+		if item.Name == name then
+			return item
+		end
+	end
 end
 
 -- [Functional] --
@@ -1025,6 +1076,11 @@ local function Run_Farm_TypeB()
 		return
 	end
 
+	local backpack = GetLocalBackpack()
+	if not backpack then
+		return
+	end
+
 	if not PlayerIsAlive() then
 		return
 	end
@@ -1043,42 +1099,20 @@ local function Run_Farm_TypeB()
 	moving = AutoMovement_ShopOutside(localCharacter, localRoot, localHumanoid)
 	if moving then return end
 
-	if not PlayerIsFirstPerson() then
-		SetCameraToFirstPerson()
-	end
+	if not localCharacter:GetAttribute("RobloxE") then
+		localCharacter:SetAttribute("RobloxE", true)
 
-	if isEquipping then
-		return
-	end
-
-	local timeSinceLastEquip = (os.clock() - lastAutoEquip)
-	if timeSinceLastEquip < 1 then
-		return
-	end
-
-	lastAutoEquip = os.clock()
-
-	local backpack = GetLocalBackpack()
-	if not backpack then
-		return
-	end
-
-	local foundPistol = localCharacter:FindFirstChild("Pistol")
-	if not foundPistol then
-		foundPistol = backpack:FindFirstChild("Pistol")
-		if foundPistol then
-			isEquipping = true
-
-			task.delay(0.2, function()
-				isEquipping = false
-			end)
-
-			localHumanoid:EquipTool(foundPistol)
-		else
-			BuyWeaponEvent:FireServer("Pistol")
+		if not PlayerIsFirstPerson() then
+			SetCameraToFirstPerson()
 		end
-
-		return
+		
+		local hasWeaponEquipped = localCharacter:FindFirstChildWhichIsA("Tool")
+		if not hasWeaponEquipped then
+			local foundWeapon = backpack:FindFirstChildWhichIsA("Tool")
+			if foundWeapon then
+				localHumanoid:EquipTool(foundWeapon)
+			end
+		end
 	end
 end
 
@@ -1097,7 +1131,7 @@ local function Run_Upgrade_Melee()
 	UpgradeStructurePlayerEvent:FireServer("Melee", "WitherDamage")
 end
 
-local function Run_Combat_InfiniteAmmoResell()
+local function Run_InfiniteAmmoResell()
 	local currentGun = GetCurrentGun()
 	if not currentGun then
 		RemoveOldReticle()
@@ -1124,8 +1158,8 @@ local function Run_Combat_InfiniteAmmoResell()
 
 	local bargainerPerk = SufficientBargainerPerk()
 
-	if foundTool.Name ~= "Pistol" then -- Prevent sell of guns other than pistol (If bargainer perk is not level 4)
-		if not bargainerPerk then
+	if foundTool.Name ~= "Pistol" then -- Prevent sell of guns other than pistol
+		if not bargainerPerk then -- (If bargainer perk is not level 4)
 			return
 		end
 	end
@@ -1154,6 +1188,10 @@ local function Run_Combat_InfiniteAmmoResell()
 	local toolName = foundTool.Name
 
 	local backpack = GetLocalBackpack()
+	if not backpack then
+		return
+	end
+	
 	local connection = nil
 	connection = backpack.ChildAdded:Connect(function(boughtTool)
 		local boughtName = boughtTool.Name
@@ -1180,6 +1218,11 @@ local function Run_Combat_InfiniteAmmoResell()
 
 			if #previousUpgrades > 0 then
 				task.wait(0.1)
+			end
+
+			local equippedDifferentTool = localCharacter:FindFirstChildWhichIsA("Tool")
+			if equippedDifferentTool then
+				return
 			end
 
 			humanoid:EquipTool(foundTool)
@@ -1222,22 +1265,31 @@ local function Run_Combat_InfiniteAmmoResell()
 
 	task.wait(Combat_AmmoSellWaitTime or 0)
 
-	SellWeaponEvent:FireServer(toolName)
+	AddPurchaseIgnore(toolName, 0.25)
+
+	for i = 1, 3 do
+		SellWeaponEvent:FireServer(toolName)
+		task.wait()
+	end
+	
 	task.wait(0.2)
 
 	BuyWeaponEvent:FireServer(toolName)
-	task.wait(0.2)
 
-	for _, upgradeInfo in ipairs(previousUpgrades) do
-		for i = 1, upgradeInfo.Value do
-			UpgradeWeaponEvent:FireServer(toolName, upgradeInfo.Upgrade)
+	task.delay(Wait_Upgrade, function()
+		for _, upgradeInfo in ipairs(previousUpgrades) do
+			for i = 1, upgradeInfo.Value do
+				UpgradeWeaponEvent:FireServer(toolName, upgradeInfo.Upgrade)
+			end
 		end
-	end
+	end)
+
+	task.wait(0.2)
 
 	isReselling = false
 end
 
-local function Run_Combat_AlwaysAllowShooting()
+local function Run_AlwaysAllowShooting()
 	local localCharacter = GetLocalCharacter()
 	if not localCharacter then
 		return
@@ -1279,13 +1331,16 @@ local function UpdateBulletSpread(tool)
 	end)
 end
 
-local function Run_Combat_BulletSpread()
-	local localCharacter, localRoot = GetLocalCharacter()
+local function Run_BulletSpread()
+	local localCharacter = GetLocalCharacter()
 	if not localCharacter then
 		return
 	end
 
 	local backpack = GetLocalBackpack()
+	if not backpack then
+		return
+	end
 
 	for _, tool in backpack:GetChildren() do
 		UpdateBulletSpread(tool)
@@ -1389,14 +1444,6 @@ local function Run_Combat_AutoHeal()
 	local previousTool = localCharacter:FindFirstChildWhichIsA("Tool")
 	if previousTool then
 		previousTool = previousTool.Name
-	end
-
-	local function FindItemInTable(searchTable, name)
-		for _, item in searchTable do
-			if item.Name == name then
-				return item
-			end
-		end
 	end
 
 	local currentTools = GetCurrentTools(true)
@@ -1579,6 +1626,11 @@ local function Run_AutoSell()
 		return
 	end
 
+	local localHumanoid = GetLocalHumanoid()
+	if not localHumanoid then
+		return
+	end
+
 	local backpack = GetLocalBackpack()
 	if not backpack then
 		return
@@ -1628,13 +1680,18 @@ local function Run_AutoSell()
 		table.insert(toolsToProcess, tool)
 	end
 
+	local previousTool = localCharacter:FindFirstChildWhichIsA("Tool")
+	if previousTool then
+		previousTool = previousTool.Name
+	end
+
 	for _, tool in ipairs(toolsToProcess) do
 		task.spawn(function()
 			local toolName = tool.Name
 			local previousUpgrades = AddPreviousUpgrades(toolName)
 
 			SellWeaponEvent:FireServer(toolName)
-			task.wait(15)
+			task.wait(5)
 
 			if Shop_AutoSell and Shop_AutoSellRePurchase then
 				local bargainerPerk = SufficientBargainerPerk()
@@ -1643,11 +1700,20 @@ local function Run_AutoSell()
 				end
 
 				BuyWeaponEvent:FireServer(toolName)
-				task.wait(0.2)
+				task.wait(Wait_Upgrade)
 
 				for _, upgradeInfo in ipairs(previousUpgrades) do
 					for i = 1, upgradeInfo.Value do
 						UpgradeWeaponEvent:FireServer(toolName, upgradeInfo.Upgrade)
+					end
+				end
+
+				task.wait(0.2)
+
+				if Combat_EquipAutoPurchaseItem and previousTool then
+					local foundTool = backpack:FindFirstChild(previousTool)
+					if foundTool then
+						localHumanoid:EquipTool(foundTool)
 					end
 				end
 			end
@@ -1672,6 +1738,203 @@ local function Run_RemoveEncroachingFog()
 	end
 
 	fogDome.Transparency = 1
+end
+
+local function NormalizeWeaponName(name)
+    return name:lower():gsub("%s+", "")
+end
+
+local function GetWeaponList()
+    local weaponList = {}
+    if Shop_AutoPurchaseItem then
+        for weaponName in string.gmatch(Shop_AutoPurchaseItem, '([^,]+)') do
+            local trimmedName = weaponName:match("^%s*(.-)%s*$")
+            if trimmedName ~= "" then
+                table.insert(weaponList, trimmedName)
+            end
+        end
+    end
+    return weaponList
+end
+
+local function Run_AutoPurchase()
+    local weaponList = GetWeaponList()
+    if #weaponList == 0 then
+        return
+    end
+
+	if isReselling then
+		return
+	end
+
+    local localCharacter = LocalPlayer.Character
+    if not localCharacter then
+        return
+    end
+
+    local localHumanoid = GetLocalHumanoid()
+    if not localHumanoid then
+        return
+    end
+
+    local backpack = GetLocalBackpack()
+    if not backpack then
+        return
+    end
+
+    local currentTools = GetCurrentTools()
+    if not currentTools then
+        return
+    end
+
+    local timeSinceLastPurchase = (os.clock() - lastAutoPurchase)
+    if timeSinceLastPurchase < 0.2 then
+        return
+    end
+    lastAutoPurchase = os.clock()
+
+    local function ConfirmEquipped(itemToPurchase)
+        local startTime = os.clock()
+        local foundTool = backpack:FindFirstChild(itemToPurchase)
+
+        while not foundTool do
+            task.wait()
+            foundTool = backpack:FindFirstChild(itemToPurchase)
+
+            local elapsedTime = (os.clock() - startTime)
+            if elapsedTime > 1 then
+                break
+            end
+        end
+
+        if not foundTool then
+            return
+        end
+
+        startTime = os.clock()
+        local equippedTool = localCharacter:FindFirstChild(itemToPurchase)
+
+        while not equippedTool do
+            localHumanoid:EquipTool(foundTool)
+            task.wait(0.1)
+            equippedTool = localCharacter:FindFirstChild(itemToPurchase)
+
+            local elapsedTime = (os.clock() - startTime)
+            if elapsedTime > 1 then
+                break
+            end
+        end
+    end
+
+    local function GetMaxValue(upgrade)
+        local success, maxValue = pcall(function()
+            return upgrade.MaxValue
+        end)
+
+        if not success then
+            maxValue = 1
+        end
+
+        return maxValue
+    end
+
+    local function GetRandomUpgrade(upgrades)
+        local availableUpgrades = {}
+
+        for _, upgrade in ipairs(upgrades) do
+            if upgrade.Value < GetMaxValue(upgrade) then
+                table.insert(availableUpgrades, upgrade)
+            end
+        end
+
+        if #availableUpgrades > 0 then
+            local randomIndex = math.random(1, #availableUpgrades)
+            return availableUpgrades[randomIndex]
+        end
+        return nil
+    end
+
+    local function ProcessUpgrade(upgrade, itemToPurchase)
+        for i = 1, GetMaxValue(upgrade) do
+            UpgradeWeaponEvent:FireServer(itemToPurchase, upgrade.Name)
+        end
+    end
+
+    local function HandleDefinedUpgrades(weaponUpgrades, itemToPurchase, definedUpgrades)
+        local foundUpgrades = weaponUpgrades:FindFirstChild(itemToPurchase)
+        if not foundUpgrades then return end
+
+        for _, upgrade in ipairs(definedUpgrades) do
+            local equivalentUpgrade = foundUpgrades:FindFirstChild(upgrade)
+            if equivalentUpgrade and equivalentUpgrade.Value < GetMaxValue(equivalentUpgrade) then
+                ProcessUpgrade(equivalentUpgrade, itemToPurchase)
+            end
+        end
+    end
+
+    local function HandleRandomUpgrades(weaponUpgrades, itemToPurchase)
+        local foundUpgrades = weaponUpgrades:FindFirstChild(itemToPurchase)
+        if not foundUpgrades then return end
+
+        local randomUpgrade = GetRandomUpgrade(foundUpgrades:GetChildren())
+        if randomUpgrade then
+            ProcessUpgrade(randomUpgrade, itemToPurchase)
+        end
+    end
+
+    local function AddUpgrades(itemToPurchase)
+        local weaponUpgrades = GetWeaponUpgrades()
+        if not weaponUpgrades then
+            return
+        end
+
+        local definedUpgrades = definedAutoUpgrades[itemToPurchase]
+
+        if definedUpgrades then
+            HandleDefinedUpgrades(weaponUpgrades, itemToPurchase, definedUpgrades)
+        else
+            HandleRandomUpgrades(weaponUpgrades, itemToPurchase)
+        end
+    end
+
+    for _, weaponName in ipairs(weaponList) do
+        local normalizedWeaponName = NormalizeWeaponName(weaponName)
+
+        local preventPurchase = false
+        for _, ignoredItem in ipairs(ignoreAutoPurchase) do
+            if NormalizeWeaponName(ignoredItem) == normalizedWeaponName then
+                preventPurchase = true
+                break
+            end
+        end
+
+        if not preventPurchase then
+            local itemAlreadyBought = false
+            for _, tool in ipairs(currentTools) do
+                if NormalizeWeaponName(tool.Name) == normalizedWeaponName then
+                    itemAlreadyBought = true
+                    break
+                end
+            end
+
+            if not itemAlreadyBought then
+                local weaponUpgrades = GetWeaponUpgrades()
+                if weaponUpgrades then
+                    for _, weapon in ipairs(weaponUpgrades:GetChildren()) do
+                        if NormalizeWeaponName(weapon.Name) == normalizedWeaponName then
+                            BuyWeaponEvent:FireServer(weapon.Name)
+                            ConfirmEquipped(weapon.Name)
+                            break
+                        end
+                    end
+                end
+            end
+
+            if Shop_AutoPurchaseIncludeUpgrades then
+                AddUpgrades(weaponName)
+            end
+        end
+    end
 end
 
 -- [[Default]] --
@@ -1904,7 +2167,7 @@ Section_Combat_Weapon:Toggle({
 	Tooltip = "Stops ammo-refill from disabling your ability to shoot. (Also ignores anything else that stops you from shooting)",
 	Callback = function(Value)
 		if Value then
-			RunService:BindToRenderStep("Combat_AlwaysAllowShooting", Enum.RenderPriority.Last.Value, Run_Combat_AlwaysAllowShooting)
+			RunService:BindToRenderStep("Combat_AlwaysAllowShooting", Enum.RenderPriority.Last.Value, Run_AlwaysAllowShooting)
 		else
 			RunService:UnbindFromRenderStep("Combat_AlwaysAllowShooting")
 		end
@@ -1946,7 +2209,7 @@ local Toggle_AmmoEmptySell = Section_Combat_EmptySell:Toggle({
 	Tooltip = "When your weapon runs out of ammo, sell it, then purchase it. (REQUIRES the BARGAINER perk at level 4 for guns other than pistol)",
 	Callback = function(Value)
 		if Value then
-			RunService:BindToRenderStep("Combat_InfiniteAmmoResell", Enum.RenderPriority.Last.Value, Run_Combat_InfiniteAmmoResell)
+			RunService:BindToRenderStep("Combat_InfiniteAmmoResell", Enum.RenderPriority.Last.Value, Run_InfiniteAmmoResell)
 		else
 			RunService:UnbindFromRenderStep("Combat_InfiniteAmmoResell")
 		end
@@ -2216,9 +2479,43 @@ Section_Shop_Sell:Button({
 	end
 })
 
+local Section_Shop_AutoPurchase = Tab_Shop:Section({
+	Text = "Auto Purchase",
+	Side = "Right"
+})
+
+Section_Shop_AutoPurchase:Toggle({
+	Text = "Enabled",
+	Tooltip = "Automatically purchase a weapon when the funds are available.",
+	Callback = function(Value)
+		if Value then
+			RunService:BindToRenderStep("Shop_AutoPurchase", Enum.RenderPriority.Last.Value, Run_AutoPurchase)
+		else
+			RunService:UnbindFromRenderStep("Shop_AutoPurchase")
+		end
+	end
+})
+
+Section_Shop_AutoPurchase:Input({
+	Text = "Weapon Order",
+	Tooltip = "What order to purchase weapons? (ex. 'Micro Uzi, AK-47, Minigun')",
+	Placeholder = "Nothing selected.",
+	Callback = function(Value)
+		Shop_AutoPurchaseItem = Value
+	end
+})
+
+Section_Shop_AutoPurchase:Toggle({
+	Text = "Include Upgrades",
+	Tooltip = "Automatically upgrade the weapon once purchased. (Randomly chooses upgrades for most weapons)",
+	Callback = function(Value)
+		Shop_AutoPurchaseIncludeUpgrades = Value
+	end
+})
+
 local Section_Shop_AutoSell = Tab_Shop:Section({
 	Text = "Auto Sell",
-	Side = "Left"
+	Side = "Right"
 })
 
 Section_Shop_AutoSell:Toggle({
@@ -2229,7 +2526,7 @@ Section_Shop_AutoSell:Toggle({
 
 		if Value then
 			connection_autoSell = ClientWaveSurviveEvent.OnClientEvent:Connect(function()
-				task.wait(3)
+				task.wait(10)
 				Run_AutoSell()
 			end)
 		else
@@ -2246,6 +2543,14 @@ Section_Shop_AutoSell:Toggle({
 	Tooltip = "Re-purchase the weapons once mutual-fund activates. (REQUIRES the BARGAINER perk at level 4)",
 	Callback = function(Value)
 		Shop_AutoSellRePurchase = Value
+	end
+})
+
+Section_Shop_AutoSell:Toggle({
+	Text = "Equip Previous Item",
+	Tooltip = "Re-Equip the previously-held item once you re-purchase it.",
+	Callback = function(Value)
+		Combat_EquipAutoPurchaseItem = Value
 	end
 })
 
@@ -2349,7 +2654,7 @@ local Section_Farm_TypeA = Tab_Farm:Section({
 
 local Toggle_Farm_TypeA = Section_Farm_TypeA:Toggle({
 	Text = "Enabled",
-	Tooltip = "Player will walk to the shop's front door. (Melee)",
+	Tooltip = "Player will walk to the shop's front door",
 	Callback = function(Value)
 		if Value then
 			RunService:BindToRenderStep("Farm_TypeA", Enum.RenderPriority.Last.Value, Run_Farm_TypeA)
@@ -2359,23 +2664,8 @@ local Toggle_Farm_TypeA = Section_Farm_TypeA:Toggle({
 	end
 })
 
-Section_Farm_TypeA:Button({
-	Text = "Add Dependencies",
-	Tooltip = "Enable the basic dependencies required for auto-farm to work correctly.",
-	Callback = function(Value)
-		Section_Farm_Status_AntiAFK:Set(true)
-		HeartbeatWait()
-
-		Section_Farm_Status_AutoReady:Set(true)
-		HeartbeatWait()
-
-		Section_Combat_KillAura_Enabled:Set(true)
-		HeartbeatWait()
-	end
-})
-
 Section_Farm_TypeA:Keybind({
-	Text = "Stop",
+	Text = "Failsafe",
 	Tooltip = "Stop the auto-farm.",
 	Default = Enum.KeyCode.X,
 	Callback = function(Value)
@@ -2383,63 +2673,31 @@ Section_Farm_TypeA:Keybind({
 	end
 })
 
--- local Section_Farm_TypeB = Tab_Farm:Section({
--- 	Text = "Type B",
--- 	Side = "Left"
--- })
+local Section_Farm_TypeB = Tab_Farm:Section({
+	Text = "Type B",
+	Side = "Left"
+})
 
--- local Toggle_Farm_TypeB = Section_Farm_TypeB:Toggle({
--- 	Text = "Enabled",
--- 	Tooltip = "Player will walk outside the shop's front door. (Shooting)",
--- 	Callback = function(Value)
--- 		if Value then
--- 			RunService:BindToRenderStep("Farm_TypeB", Enum.RenderPriority.Last.Value, Run_Farm_TypeB)
--- 		else
--- 			RunService:UnbindFromRenderStep("Farm_TypeB")
--- 		end
--- 	end
--- })
+local Toggle_Farm_TypeB = Section_Farm_TypeB:Toggle({
+	Text = "Enabled",
+	Tooltip = "Player will walk outside the shop's front door",
+	Callback = function(Value)
+		if Value then
+			RunService:BindToRenderStep("Farm_TypeB", Enum.RenderPriority.Last.Value, Run_Farm_TypeB)
+		else
+			RunService:UnbindFromRenderStep("Farm_TypeB")
+		end
+	end
+})
 
--- Section_Farm_TypeB:Button({
--- 	Text = "Add Dependencies",
--- 	Tooltip = "Enable the basic dependencies required for auto-farm to work correctly.",
--- 	Callback = function(Value)
--- 		task.spawn(function()
--- 			Section_Farm_Status_AntiAFK:Set(true)
--- 			HeartbeatWait()
-
--- 			Section_Farm_Status_AutoReady:Set(true)
--- 			HeartbeatWait()
-
--- 			Toggle_AimAssistEnabled:Set(true)
--- 			HeartbeatWait()
-
--- 			Section_Combat_Aiming_PriorityHunter:Set(true)
--- 			HeartbeatWait()
-
--- 			Section_Combat_Aiming_PriorityBoss:Set(true)
--- 			HeartbeatWait()
-
--- 			Section_Combat_Aiming_AutoLock:Set(true)
--- 			HeartbeatWait()
-
--- 			Toggle_AmmoEmptySell:Set(true)
--- 			HeartbeatWait()
-
--- 			Section_Combat_Automatic_AutoShoot:Set(true)
--- 			HeartbeatWait()
--- 		end)
--- 	end
--- })
-
--- Section_Farm_TypeB:Keybind({
--- 	Text = "Stop",
--- 	Tooltip = "Stop the auto-farm.",
--- 	Default = Enum.KeyCode.X,
--- 	Callback = function(Value)
--- 		Toggle_Farm_TypeB:Set(false)
--- 	end
--- })
+Section_Farm_TypeB:Keybind({
+	Text = "Failsafe",
+	Tooltip = "Stop the auto-farm.",
+	Default = Enum.KeyCode.X,
+	Callback = function(Value)
+		Toggle_Farm_TypeB:Set(false)
+	end
+})
 
 --- [[[]]] ---
 
@@ -2526,9 +2784,7 @@ UserInputService.InputEnded:Connect(OnInputEnded)
 SetupESP()
 
 RunService:UnbindFromRenderStep("Combat_BulletSpread")
-RunService:BindToRenderStep("Combat_BulletSpread", Enum.RenderPriority.Last.Value, function()
-	Run_Combat_BulletSpread()
-end)
+RunService:BindToRenderStep("Combat_BulletSpread", Enum.RenderPriority.Last.Value, Run_BulletSpread)
 
 task.spawn(function()
 	globalTransparentParts = GetTransparentParts()
